@@ -222,35 +222,48 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
     console.log(`[syncSubscription] 🔍 Processing ${result.items.length} events for today...`);
 
     // SIMPLE: Detect changes for today's events only
+    let eventIndex = 0;
     for (const event of result.items) {
-      // Use change detection (will detect new/updated/cancelled)
-      const change = await detectEventChange(event, subscriptionId);
+      eventIndex++;
+      console.log(`[syncSubscription] Processing event ${eventIndex}/${result.items.length}: ${event.summary || event.id}`);
+      
+      try {
+        // Use change detection (will detect new/updated/cancelled)
+        const change = await detectEventChange(event, subscriptionId);
 
-      if (change) {
-        console.log(`[syncSubscription] 📝 Change detected:`, {
-          type: change.type,
-          event: event.summary || event.id,
-          status: event.status,
-        });
-        changes.push(change);
-      }
+        if (change) {
+          console.log(`[syncSubscription] 📝 Change detected:`, {
+            type: change.type,
+            event: event.summary || event.id,
+            status: event.status,
+          });
+          changes.push(change);
+        }
 
-      // Update cache
-      if (event.status !== 'cancelled') {
-        await cacheEvent(subscriptionId, {
-          event_id: event.id,
-          etag: event.etag,
-          start_time: event.start?.dateTime || event.start?.date || '',
-          end_time: event.end?.dateTime || event.end?.date || '',
-          summary: event.summary || '',
-          location: event.location || '',
-          status: event.status,
-          last_seen_at: new Date().toISOString(),
-        });
+        // Update cache
+        if (event.status !== 'cancelled') {
+          console.log(`[syncSubscription] Caching event: ${event.id}`);
+          await cacheEvent(subscriptionId, {
+            event_id: event.id,
+            etag: event.etag,
+            start_time: event.start?.dateTime || event.start?.date || '',
+            end_time: event.end?.dateTime || event.end?.date || '',
+            summary: event.summary || '',
+            location: event.location || '',
+            status: event.status,
+            last_seen_at: new Date().toISOString(),
+          });
+          console.log(`[syncSubscription] ✅ Cached event: ${event.id}`);
+        } else {
+          console.log(`[syncSubscription] ⏭️  Skipping cancelled event: ${event.id}`);
+        }
+      } catch (error) {
+        console.error(`[syncSubscription] ❌ Error processing event ${eventIndex}:`, error);
+        throw error;
       }
     }
 
-    console.log(`[syncSubscription] ✅ Finished processing ${result.items.length} events`);
+    console.log(`[syncSubscription] ✅ Finished processing ${result.items.length} events, detected ${changes.length} changes`);
 
     // Build location status board from today's events
     console.log(`[syncSubscription] 📍 Building location status board from ${result.items.length} events...`);

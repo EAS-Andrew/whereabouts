@@ -243,11 +243,9 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
           result.error
         );
       } else {
-        console.log(`[syncSubscription] Sent ${change.type} notification for event: ${change.event.summary}`);
+        console.log(`[syncSubscription] ✅ Sent ${change.type} notification for event: ${change.event.summary}`);
       }
     }
-  } else {
-    console.warn(`[syncSubscription] Discord channel not found for subscription ${subscriptionId}: ${subscription.discord_channel_id}`);
   }
 
   // Update sync token
@@ -256,7 +254,10 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
       sync_token: result.nextSyncToken,
       last_sync_at: new Date().toISOString(),
     });
+    console.log(`[syncSubscription] ✅ Updated sync token for subscription ${subscriptionId}`);
   }
+
+  console.log(`[syncSubscription] ✅ Sync completed for subscription ${subscriptionId}`);
 }
 
 async function detectEventChange(

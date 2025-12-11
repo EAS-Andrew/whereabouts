@@ -223,11 +223,16 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
   console.log(`[syncSubscription] 🔍 Processing ${result.items.length} events for changes... (first sync: ${isFirstSync})`);
 
   // Process each event
+  let processed = 0;
   for (const event of result.items) {
+    processed++;
+    if (processed % 50 === 0) {
+      console.log(`[syncSubscription] ⏳ Processed ${processed}/${result.items.length} events...`);
+    }
+
     // On first sync, treat all non-cancelled events as "new" for notifications
     // (even though they're not technically "new", we want to notify about them)
     if (isFirstSync && event.status !== 'cancelled') {
-      console.log(`[syncSubscription] 📝 First sync - treating event as new: ${event.summary || event.id}`);
       changes.push({
         type: 'new',
         event,
@@ -260,6 +265,8 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
       });
     }
   }
+
+  console.log(`[syncSubscription] ✅ Finished processing all ${result.items.length} events`);
 
   console.log(`[syncSubscription] 📊 Summary: ${changes.length} total changes detected (${isFirstSync ? 'first sync - all events treated as new' : 'incremental sync'})`);
 

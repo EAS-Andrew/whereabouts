@@ -218,20 +218,32 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
   }
 
   const changes: EventChange[] = [];
+  const isFirstSync = !subscription.sync_token;
 
-  console.log(`[syncSubscription] 🔍 Processing ${result.items.length} events for changes...`);
+  console.log(`[syncSubscription] 🔍 Processing ${result.items.length} events for changes... (first sync: ${isFirstSync})`);
 
   // Process each event
   for (const event of result.items) {
-    const change = await detectEventChange(event, subscriptionId);
-
-    if (change) {
-      console.log(`[syncSubscription] 📝 Change detected:`, {
-        type: change.type,
-        event: event.summary || event.id,
-        status: event.status,
+    // On first sync, treat all non-cancelled events as "new" for notifications
+    // (even though they're not technically "new", we want to notify about them)
+    if (isFirstSync && event.status !== 'cancelled') {
+      console.log(`[syncSubscription] 📝 First sync - treating event as new: ${event.summary || event.id}`);
+      changes.push({
+        type: 'new',
+        event,
       });
-      changes.push(change);
+    } else {
+      // On subsequent syncs, use change detection
+      const change = await detectEventChange(event, subscriptionId);
+
+      if (change) {
+        console.log(`[syncSubscription] 📝 Change detected:`, {
+          type: change.type,
+          event: event.summary || event.id,
+          status: event.status,
+        });
+        changes.push(change);
+      }
     }
 
     // Update cache
@@ -249,14 +261,18 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
     }
   }
 
-  console.log(`[syncSubscription] 📊 Summary: ${changes.length} total changes detected`);
+  console.log(`[syncSubscription] 📊 Summary: ${changes.length} total changes detected (${isFirstSync ? 'first sync - all events treated as new' : 'incremental sync'})`);
 
   // Filter and send notifications
-  const notificationsToSend = changes.filter(change =>
-    shouldNotifyForChange(change, subscription)
-  );
+  const notificationsToSend = changes.filter(change => {
+    const shouldNotify = shouldNotifyForChange(change, subscription);
+    if (!shouldNotify) {
+      console.log(`[syncSubscription] ⏭️  Skipping notification for ${change.type} event "${change.event.summary || change.event.id}" (filtered by settings)`);
+    }
+    return shouldNotify;
+  });
 
-  console.log(`[syncSubscription] 📬 ${notificationsToSend.length} notifications will be sent (filtered by settings)`);
+  console.log(`[syncSubscription] 📬 ${notificationsToSend.length} notifications will be sent (filtered from ${changes.length} changes)`);
 
   // Get Discord channel
   console.log(`[syncSubscription] 🔍 Looking up Discord channel: ${subscription.discord_channel_id}`);

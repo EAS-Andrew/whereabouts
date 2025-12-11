@@ -4,7 +4,7 @@ import type { GoogleCalendarEvent } from './types';
 
 export async function getGoogleCalendarClient(googleUserId: string) {
   console.log(`[getGoogleCalendarClient] Getting client for user: ${googleUserId}`);
-  
+
   const user = await getUser(googleUserId);
   if (!user) {
     console.error(`[getGoogleCalendarClient] User not found: ${googleUserId}`);
@@ -17,7 +17,7 @@ export async function getGoogleCalendarClient(googleUserId: string) {
   const now = Date.now();
   const refreshBuffer = 5 * 60 * 1000; // 5 minutes
   const expiresIn = user.access_token_expires_at - now;
-  
+
   console.log(`[getGoogleCalendarClient] Token expires in ${Math.round(expiresIn / 1000)}s`);
 
   if (user.access_token_expires_at < now + refreshBuffer) {
@@ -99,7 +99,7 @@ export async function listEvents(
 ) {
   console.log(`[listEvents] Fetching events for user ${googleUserId}, calendar ${calendarId}`);
   console.log(`[listEvents] Options:`, options);
-  
+
   try {
     console.log(`[listEvents] Getting Google Calendar client...`);
     const calendar = await getGoogleCalendarClient(googleUserId);

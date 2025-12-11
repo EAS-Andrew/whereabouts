@@ -119,8 +119,8 @@ export function SubscriptionList() {
                     </h3>
                     <span
                       className={`rounded-full px-2 py-1 text-xs font-medium ${subscription.active
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-800'
                         }`}
                     >
                       {subscription.active ? 'Active' : 'Inactive'}

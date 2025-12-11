@@ -1,7 +1,6 @@
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { getServerSession } from 'next-auth';
+import { auth } from '@/app/api/auth/[...nextauth]/route';
 
-// Helper function to get session
+// Helper function to get session (Auth.js v5)
 export async function getSession() {
-  return await getServerSession(authOptions);
+  return await auth();
 }

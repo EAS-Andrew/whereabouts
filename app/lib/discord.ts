@@ -63,27 +63,27 @@ export async function postToDiscordWithRetry(
   maxRetries: number = 3
 ): Promise<{ success: boolean; error?: string }> {
   let lastError: string | undefined;
-  
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const result = await postToDiscord(webhookUrl, payload);
-    
+
     if (result.success) {
       return result;
     }
-    
+
     lastError = result.error;
-    
+
     // Only retry on 5xx errors
     if (result.error?.includes('5')) {
       // Exponential backoff
       await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
       continue;
     }
-    
+
     // Don't retry on 4xx errors (invalid webhook, etc.)
     break;
   }
-  
+
   return {
     success: false,
     error: lastError,

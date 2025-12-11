@@ -14,7 +14,7 @@ export async function getGoogleCalendarClient(googleUserId: string) {
     // Token expired, refresh it
     const refreshed = await refreshAccessToken(user.refresh_token);
     accessToken = refreshed.access_token;
-    
+
     await updateUser(googleUserId, {
       access_token: refreshed.access_token,
       access_token_expires_at: Date.now() + refreshed.expires_in * 1000,
@@ -37,12 +37,12 @@ export async function getGoogleCalendarClient(googleUserId: string) {
 async function refreshAccessToken(refreshToken: string) {
   const response = await fetch(
     'https://oauth2.googleapis.com/token?' +
-      new URLSearchParams({
-        client_id: process.env.GOOGLE_CLIENT_ID!,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-        grant_type: 'refresh_token',
-        refresh_token: refreshToken,
-      }),
+    new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID!,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+    }),
     {
       method: 'POST',
       headers: {
@@ -78,7 +78,7 @@ export async function listEvents(
   }
 ) {
   const calendar = await getGoogleCalendarClient(googleUserId);
-  
+
   const params: any = {
     calendarId,
     ...options,
@@ -92,7 +92,7 @@ export async function listEvents(
   }
 
   const response = await calendar.events.list(params);
-  
+
   return {
     items: (response.data.items || []) as GoogleCalendarEvent[],
     nextPageToken: response.data.nextPageToken,
@@ -107,7 +107,7 @@ export async function watchCalendar(
   webhookUrl: string
 ) {
   const calendar = await getGoogleCalendarClient(googleUserId);
-  
+
   const response = await calendar.events.watch({
     calendarId,
     requestBody: {
@@ -129,7 +129,7 @@ export async function stopWatchChannel(
   channelId: string
 ) {
   const calendar = await getGoogleCalendarClient(googleUserId);
-  
+
   await calendar.channels.stop({
     requestBody: {
       id: channelId,

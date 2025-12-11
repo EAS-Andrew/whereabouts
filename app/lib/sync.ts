@@ -25,9 +25,9 @@ export async function performInitialSync(subscriptionId: string): Promise<void> 
 
   // Perform initial sync - get events from now going forward
   const timeMin = new Date().toISOString();
-  
-  let nextPageToken: string | undefined;
-  let nextSyncToken: string | undefined;
+
+  let nextPageToken: string | null | undefined;
+  let nextSyncToken: string | null | undefined;
 
   do {
     const result = await listEvents(user.google_user_id, subscription.calendar_id, {
@@ -140,9 +140,8 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
 
   // Process each event
   for (const event of result.items) {
-    const cached = await getCachedEvent(subscriptionId, event.id);
-    const change = detectEventChange(event, cached, subscription);
-    
+    const change = await detectEventChange(event, subscriptionId);
+
     if (change) {
       changes.push(change);
     }
@@ -168,7 +167,7 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
   );
 
   // Get Discord channel
-  const discordChannel = await import('./redis').then(m => 
+  const discordChannel = await import('./redis').then(m =>
     m.getDiscordChannel(subscription.discord_channel_id)
   );
 
@@ -176,9 +175,9 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
     // Send notifications
     for (const change of notificationsToSend) {
       const payload = formatEventChangeForDiscord(change, subscription.calendar_summary);
-      
+
       const result = await postToDiscordWithRetry(discordChannel.webhook_url, payload);
-      
+
       if (!result.success) {
         console.error(
           `Failed to send Discord notification for subscription ${subscriptionId}:`,
@@ -197,11 +196,11 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
   }
 }
 
-function detectEventChange(
+async function detectEventChange(
   event: GoogleCalendarEvent,
-  cached: ReturnType<typeof getCachedEvent> extends Promise<infer T> ? T : never,
-  subscription: Awaited<ReturnType<typeof getCalendarSubscription>>
-): EventChange | null {
+  subscriptionId: string
+): Promise<EventChange | null> {
+  const cached = await getCachedEvent(subscriptionId, event.id);
   if (event.status === 'cancelled') {
     return {
       type: 'cancelled',
@@ -220,18 +219,18 @@ function detectEventChange(
 
   // Check for changes
   const changes: string[] = [];
-  
+
   if (event.summary !== cached.summary) {
     changes.push('summary');
   }
-  
+
   if (
     (event.start?.dateTime || event.start?.date) !== cached.start_time ||
     (event.end?.dateTime || event.end?.date) !== cached.end_time
   ) {
     changes.push('time');
   }
-  
+
   if (event.location !== cached.location) {
     changes.push('location');
   }
@@ -250,7 +249,7 @@ function detectEventChange(
 
 function shouldNotifyForChange(
   change: EventChange,
-  subscription: Awaited<ReturnType<typeof getCalendarSubscription>>
+  subscription: NonNullable<Awaited<ReturnType<typeof getCalendarSubscription>>>
 ): boolean {
   // Cancelled events always notify if enabled
   if (change.type === 'cancelled') {
@@ -260,54 +259,54 @@ function shouldNotifyForChange(
   // New events
   if (change.type === 'new') {
     if (!subscription.notify_new_events) return false;
-    
+
     // Check notify_window_minutes
     if (subscription.notify_window_minutes > 0 && change.event.start) {
       const startTime = change.event.start.dateTime
         ? new Date(change.event.start.dateTime)
         : change.event.start.date
-        ? new Date(change.event.start.date + 'T00:00:00')
-        : null;
+          ? new Date(change.event.start.date + 'T00:00:00')
+          : null;
 
       if (startTime) {
         const now = new Date();
         const windowEnd = new Date(now.getTime() + subscription.notify_window_minutes * 60 * 1000);
-        
+
         // Only notify if event is within the window
         if (startTime > windowEnd) {
           return false;
         }
       }
     }
-    
+
     return true;
   }
 
   // Updated events
   if (change.type === 'updated') {
     if (!subscription.notify_updates) return false;
-    
+
     // Check if any change is time-related
     const hasTimeChange = change.changes?.includes('time') || false;
-    
+
     // Apply notify_window_minutes for time changes
     if (hasTimeChange && subscription.notify_window_minutes > 0 && change.event.start) {
       const startTime = change.event.start.dateTime
         ? new Date(change.event.start.dateTime)
         : change.event.start.date
-        ? new Date(change.event.start.date + 'T00:00:00')
-        : null;
+          ? new Date(change.event.start.date + 'T00:00:00')
+          : null;
 
       if (startTime) {
         const now = new Date();
         const windowEnd = new Date(now.getTime() + subscription.notify_window_minutes * 60 * 1000);
-        
+
         if (startTime > windowEnd) {
           return false;
         }
       }
     }
-    
+
     return true;
   }
 

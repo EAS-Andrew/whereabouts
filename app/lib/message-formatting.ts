@@ -39,8 +39,8 @@ export function formatEventChangeForDiscord(
     const startTime = event.start.dateTime
       ? parseISO(event.start.dateTime)
       : event.start.date
-      ? parseISO(event.start.date + 'T00:00:00')
-      : null;
+        ? parseISO(event.start.date + 'T00:00:00')
+        : null;
 
     if (startTime) {
       const isAllDay = !!event.start.date;
@@ -59,8 +59,8 @@ export function formatEventChangeForDiscord(
         const endTime = event.end.dateTime
           ? parseISO(event.end.dateTime)
           : event.end.date
-          ? parseISO(event.end.date + 'T23:59:59')
-          : null;
+            ? parseISO(event.end.date + 'T23:59:59')
+            : null;
 
         if (endTime && !isAllDay) {
           timeValue += ` - ${format(endTime, 'h:mm a')}`;
@@ -115,8 +115,8 @@ export function formatEventTimeRange(event: GoogleCalendarEvent): string {
   const startTime = event.start.dateTime
     ? parseISO(event.start.dateTime)
     : event.start.date
-    ? parseISO(event.start.date + 'T00:00:00')
-    : null;
+      ? parseISO(event.start.date + 'T00:00:00')
+      : null;
 
   if (!startTime) return 'Invalid time';
 

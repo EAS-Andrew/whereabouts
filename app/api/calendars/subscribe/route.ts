@@ -55,21 +55,24 @@ export async function POST(request: Request) {
     // Get base URL for webhook
     const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
 
-    // Set up watch channel asynchronously (don't block response)
-    // No initial sync needed - watch channel will catch all events going forward
-    setupWatchChannel(subscription.id, baseUrl)
-      .then(() => {
-        console.log(`[Subscribe] Watch channel setup completed for ${subscription.id}`);
-      })
-      .catch((error) => {
-        console.error(`[Subscribe] Error setting up watch channel for ${subscription.id}:`, error);
-        // Subscription is still created, watch can be retried via cron
-      });
+    // Set up watch channel (wait for it to complete so subscription is immediately active)
+    // This is fast - just a single Google API call
+    try {
+      await setupWatchChannel(subscription.id, baseUrl);
+      console.log(`[Subscribe] Watch channel setup completed for ${subscription.id}`);
+    } catch (error) {
+      console.error(`[Subscribe] Error setting up watch channel for ${subscription.id}:`, error);
+      // Return error since watch channel is critical for notifications
+      return NextResponse.json(
+        { error: 'Failed to setup calendar notifications. Please try again.' },
+        { status: 500 }
+      );
+    }
 
-    // Return immediately - watch channel will catch all future events
+    // Return after watch channel is active - notifications will work immediately
     return NextResponse.json({
       subscription,
-      message: 'Subscription created. You will receive notifications for new and updated events.'
+      message: 'Subscription created successfully! You will receive notifications for all calendar events.'
     });
   } catch (error) {
     console.error('Error creating subscription:', error);

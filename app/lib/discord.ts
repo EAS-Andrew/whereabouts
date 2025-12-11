@@ -23,9 +23,9 @@ export interface DiscordEmbedField {
 export async function postToDiscord(
   webhookUrl: string,
   payload: DiscordWebhookPayload
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; messageId?: string }> {
   try {
-    const response = await fetch(webhookUrl, {
+    const response = await fetch(webhookUrl + '?wait=true', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -48,7 +48,13 @@ export async function postToDiscord(
       };
     }
 
-    return { success: true };
+    // Parse response to get message ID
+    try {
+      const data = await response.json();
+      return { success: true, messageId: data.id };
+    } catch {
+      return { success: true };
+    }
   } catch (error) {
     return {
       success: false,
@@ -68,23 +74,7 @@ export async function postToDiscordWithRetry(
     const result = await postToDiscord(webhookUrl, payload);
 
     if (result.success) {
-      // Extract message ID from response if available
-      let messageId: string | undefined;
-      try {
-        const response = await fetch(webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        if (response.ok) {
-          const data = await response.json();
-          messageId = data.id;
-        }
-      } catch {
-        // Ignore - message ID is optional
-      }
-      
-      return { success: true, messageId };
+      return result;
     }
 
     lastError = result.error;
@@ -116,9 +106,11 @@ export async function editDiscordMessage(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // Discord webhook edit URL format: {webhookUrl}/messages/{messageId}
-    const editUrl = webhookUrl.includes('?')
-      ? `${webhookUrl.split('?')[0]}/messages/${messageId}?${webhookUrl.split('?')[1]}`
-      : `${webhookUrl}/messages/${messageId}`;
+    // Extract base URL and query params separately
+    const urlParts = webhookUrl.split('?');
+    const baseUrl = urlParts[0];
+    const queryParams = urlParts[1] || '';
+    const editUrl = `${baseUrl}/messages/${messageId}${queryParams ? '?' + queryParams : ''}`;
 
     const response = await fetch(editUrl, {
       method: 'PATCH',

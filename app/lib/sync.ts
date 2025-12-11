@@ -14,31 +14,40 @@ import type { EventChange, GoogleCalendarEvent } from './types';
 
 export async function performInitialSync(subscriptionId: string): Promise<void> {
   console.log(`[performInitialSync] Starting initial sync for subscription ${subscriptionId}`);
-  const subscription = await getCalendarSubscription(subscriptionId);
-  if (!subscription) {
-    throw new Error(`Subscription not found: ${subscriptionId}`);
-  }
+  
+  try {
+    const subscription = await getCalendarSubscription(subscriptionId);
+    if (!subscription) {
+      throw new Error(`Subscription not found: ${subscriptionId}`);
+    }
+    console.log(`[performInitialSync] Subscription found: ${subscription.calendar_summary}`);
 
-  const user = await getUser(subscription.user_id);
-  if (!user) {
-    throw new Error(`User not found for subscription ${subscriptionId}: ${subscription.user_id}`);
-  }
+    const user = await getUser(subscription.user_id);
+    if (!user) {
+      throw new Error(`User not found for subscription ${subscriptionId}: ${subscription.user_id}`);
+    }
+    console.log(`[performInitialSync] User found: ${user.email}`);
 
-  // Perform initial sync - get events from now going forward
-  const timeMin = new Date().toISOString();
+    // Perform initial sync - get events from now going forward
+    const timeMin = new Date().toISOString();
+    console.log(`[performInitialSync] Fetching events from: ${timeMin}`);
 
-  let nextPageToken: string | null | undefined;
-  let nextSyncToken: string | null | undefined;
-  let totalEventsCached = 0;
+    let nextPageToken: string | null | undefined;
+    let nextSyncToken: string | null | undefined;
+    let totalEventsCached = 0;
 
-  do {
-    const result = await listEvents(user.google_user_id, subscription.calendar_id, {
-      timeMin,
-      singleEvents: true,
-      orderBy: 'startTime',
-      maxResults: 2500,
-      ...(nextPageToken && { pageToken: nextPageToken }),
-    });
+    do {
+      console.log(`[performInitialSync] Fetching events page (token: ${nextPageToken || 'first page'})...`);
+      
+      const result = await listEvents(user.google_user_id, subscription.calendar_id, {
+        timeMin,
+        singleEvents: true,
+        orderBy: 'startTime',
+        maxResults: 2500,
+        ...(nextPageToken && { pageToken: nextPageToken }),
+      });
+      
+      console.log(`[performInitialSync] Received ${result.items.length} events`);
 
     // Cache all events
     for (const event of result.items) {
@@ -61,15 +70,26 @@ export async function performInitialSync(subscriptionId: string): Promise<void> 
     }
   } while (nextPageToken);
 
-  // Store sync token
-  if (nextSyncToken) {
-    await updateCalendarSubscription(subscriptionId, {
-      sync_token: nextSyncToken,
-      last_sync_at: new Date().toISOString(),
-    });
-    console.log(`[performInitialSync] Completed initial sync for subscription ${subscriptionId}, cached ${totalEventsCached} events`);
-  } else {
-    console.warn(`[performInitialSync] No sync token received for subscription ${subscriptionId}`);
+    // Store sync token
+    if (nextSyncToken) {
+      await updateCalendarSubscription(subscriptionId, {
+        sync_token: nextSyncToken,
+        last_sync_at: new Date().toISOString(),
+      });
+      console.log(`[performInitialSync] ✅ Completed initial sync for subscription ${subscriptionId}, cached ${totalEventsCached} events`);
+    } else {
+      console.warn(`[performInitialSync] ⚠️  No sync token received for subscription ${subscriptionId}`);
+    }
+  } catch (error) {
+    console.error(`[performInitialSync] ❌ Fatal error during initial sync for ${subscriptionId}:`, error);
+    if (error instanceof Error) {
+      console.error(`[performInitialSync] Error details:`, {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      });
+    }
+    throw error; // Re-throw to let caller handle
   }
 }
 

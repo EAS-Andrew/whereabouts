@@ -149,7 +149,7 @@ export async function setupWatchChannel(
 
 export async function syncSubscription(subscriptionId: string): Promise<void> {
   console.log(`[syncSubscription] 🔄 Starting sync for subscription: ${subscriptionId}`);
-  
+
   try {
     const subscription = await getCalendarSubscription(subscriptionId);
     if (!subscription) {
@@ -162,151 +162,159 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
       return;
     }
 
-  console.log(`[syncSubscription] Subscription details:`, {
-    id: subscription.id,
-    calendar: subscription.calendar_summary,
-    has_sync_token: !!subscription.sync_token,
-    user_id: subscription.user_id,
-  });
-
-  // Simplified: We always just fetch today's events, no need for sync tokens
-
-  console.log(`[syncSubscription] 🔍 Looking up user: ${subscription.user_id}`);
-  const user = await getUser(subscription.user_id);
-  if (!user) {
-    console.error(`[syncSubscription] ❌ User not found: ${subscription.user_id}`);
-    throw new Error('User not found');
-  }
-  console.log(`[syncSubscription] ✅ User found: ${user.email}`);
-
-  let result;
-  try {
-    // SIMPLE: Always just get TODAY's events (that's all we need!)
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
-
-    console.log(`[syncSubscription] 📡 Fetching TODAY's events (${todayStart.toISOString()} to ${todayEnd.toISOString()})`);
-
-    result = await listEvents(user.google_user_id, subscription.calendar_id, {
-      timeMin: todayStart.toISOString(),
-      timeMax: todayEnd.toISOString(),
-      singleEvents: true,
-      orderBy: 'startTime',
+    console.log(`[syncSubscription] Subscription details:`, {
+      id: subscription.id,
+      calendar: subscription.calendar_summary,
+      has_sync_token: !!subscription.sync_token,
+      user_id: subscription.user_id,
     });
 
-    console.log(`[syncSubscription] ✅ Received ${result.items.length} events for today from Google`);
-  } catch (error: any) {
-    // If sync token is invalid (410 error), clear it and retry without token
-    if (error.code === 410 || error.message?.includes('Sync token') || error.message?.includes('410')) {
-      console.warn(`[syncSubscription] ⚠️  Sync token invalid for subscription ${subscriptionId}, clearing and retrying`);
-      await updateCalendarSubscription(subscriptionId, { sync_token: undefined });
-      // Retry this same sync without the token
-      const timeMin = new Date().toISOString();
+    // Simplified: We always just fetch today's events, no need for sync tokens
+
+    console.log(`[syncSubscription] 🔍 Looking up user: ${subscription.user_id}`);
+    const user = await getUser(subscription.user_id);
+    if (!user) {
+      console.error(`[syncSubscription] ❌ User not found: ${subscription.user_id}`);
+      throw new Error('User not found');
+    }
+    console.log(`[syncSubscription] ✅ User found: ${user.email}`);
+
+    let result;
+    try {
+      // SIMPLE: Always just get TODAY's events (that's all we need!)
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+
+      console.log(`[syncSubscription] 📡 Fetching TODAY's events (${todayStart.toISOString()} to ${todayEnd.toISOString()})`);
+
       result = await listEvents(user.google_user_id, subscription.calendar_id, {
-        timeMin,
+        timeMin: todayStart.toISOString(),
+        timeMax: todayEnd.toISOString(),
         singleEvents: true,
         orderBy: 'startTime',
       });
-      console.log(`[syncSubscription] ✅ Retry succeeded, received ${result.items.length} events`);
+
+      console.log(`[syncSubscription] ✅ Received ${result.items.length} events for today from Google`);
+    } catch (error: any) {
+      // If sync token is invalid (410 error), clear it and retry without token
+      if (error.code === 410 || error.message?.includes('Sync token') || error.message?.includes('410')) {
+        console.warn(`[syncSubscription] ⚠️  Sync token invalid for subscription ${subscriptionId}, clearing and retrying`);
+        await updateCalendarSubscription(subscriptionId, { sync_token: undefined });
+        // Retry this same sync without the token
+        const timeMin = new Date().toISOString();
+        result = await listEvents(user.google_user_id, subscription.calendar_id, {
+          timeMin,
+          singleEvents: true,
+          orderBy: 'startTime',
+        });
+        console.log(`[syncSubscription] ✅ Retry succeeded, received ${result.items.length} events`);
+      } else {
+        console.error(`[syncSubscription] ❌ Error fetching events:`, error);
+        throw error;
+      }
+    }
+
+    const changes: EventChange[] = [];
+
+    console.log(`[syncSubscription] 🔍 Processing ${result.items.length} events for today...`);
+
+    // SIMPLE: Detect changes for today's events only
+    for (const event of result.items) {
+      // Use change detection (will detect new/updated/cancelled)
+      const change = await detectEventChange(event, subscriptionId);
+
+      if (change) {
+        console.log(`[syncSubscription] 📝 Change detected:`, {
+          type: change.type,
+          event: event.summary || event.id,
+          status: event.status,
+        });
+        changes.push(change);
+      }
+
+      // Update cache
+      if (event.status !== 'cancelled') {
+        await cacheEvent(subscriptionId, {
+          event_id: event.id,
+          etag: event.etag,
+          start_time: event.start?.dateTime || event.start?.date || '',
+          end_time: event.end?.dateTime || event.end?.date || '',
+          summary: event.summary || '',
+          location: event.location || '',
+          status: event.status,
+          last_seen_at: new Date().toISOString(),
+        });
+      }
+    }
+
+    console.log(`[syncSubscription] ✅ Finished processing ${result.items.length} events`);
+
+    // Build location status board from today's events
+    console.log(`[syncSubscription] 📍 Building location status board from ${result.items.length} events...`);
+    const statusBoard = buildLocationStatus(result.items);
+    console.log(`[syncSubscription] 📊 Status board built with ${statusBoard.size} people`);
+    const embed = formatStatusBoard(statusBoard);
+    console.log(`[syncSubscription] 📝 Discord embed formatted`);
+
+    // Get Discord channel
+    console.log(`[syncSubscription] 🔍 Looking up Discord channel: ${subscription.discord_channel_id}`);
+    const discordChannel = await getDiscordChannel(subscription.discord_channel_id);
+
+    if (!discordChannel) {
+      console.error(`[syncSubscription] ❌ Discord channel not found: ${subscription.discord_channel_id}`);
     } else {
-      console.error(`[syncSubscription] ❌ Error fetching events:`, error);
-      throw error;
-    }
-  }
+      console.log(`[syncSubscription] ✅ Discord channel found: ${discordChannel.name || discordChannel.id}`);
 
-  const changes: EventChange[] = [];
+      // Check if we have an existing status message ID for today
+      console.log(`[syncSubscription] 🔍 Checking for existing status message ID...`);
+      const existingMessageId = await getStatusMessageId(subscriptionId);
+      console.log(`[syncSubscription] Existing message ID: ${existingMessageId || 'none'}`);
 
-  console.log(`[syncSubscription] 🔍 Processing ${result.items.length} events for today...`);
-
-  // SIMPLE: Detect changes for today's events only
-  for (const event of result.items) {
-    // Use change detection (will detect new/updated/cancelled)
-    const change = await detectEventChange(event, subscriptionId);
-
-    if (change) {
-      console.log(`[syncSubscription] 📝 Change detected:`, {
-        type: change.type,
-        event: event.summary || event.id,
-        status: event.status,
-      });
-      changes.push(change);
-    }
-
-    // Update cache
-    if (event.status !== 'cancelled') {
-      await cacheEvent(subscriptionId, {
-        event_id: event.id,
-        etag: event.etag,
-        start_time: event.start?.dateTime || event.start?.date || '',
-        end_time: event.end?.dateTime || event.end?.date || '',
-        summary: event.summary || '',
-        location: event.location || '',
-        status: event.status,
-        last_seen_at: new Date().toISOString(),
-      });
-    }
-  }
-
-  console.log(`[syncSubscription] ✅ Finished processing ${result.items.length} events`);
-
-  // Build location status board from today's events
-  console.log(`[syncSubscription] 📍 Building location status board...`);
-  const statusBoard = buildLocationStatus(result.items);
-  const embed = formatStatusBoard(statusBoard);
-
-  // Get Discord channel
-  console.log(`[syncSubscription] 🔍 Looking up Discord channel: ${subscription.discord_channel_id}`);
-  const discordChannel = await getDiscordChannel(subscription.discord_channel_id);
-
-  if (!discordChannel) {
-    console.error(`[syncSubscription] ❌ Discord channel not found: ${subscription.discord_channel_id}`);
-  } else {
-    console.log(`[syncSubscription] ✅ Discord channel found: ${discordChannel.name || discordChannel.id}`);
-
-    // Check if we have an existing status message ID for today
-    const existingMessageId = await getStatusMessageId(subscriptionId);
-
-    if (existingMessageId) {
-      console.log(`[syncSubscription] 🔄 Updating existing status message: ${existingMessageId}`);
-      const result = await editDiscordMessage(discordChannel.webhook_url, existingMessageId, {
-        embeds: [embed],
-      });
-
-      if (!result.success) {
-        console.error(`[syncSubscription] ❌ Failed to update status message: ${result.error}`);
-        // If update failed (message deleted), clear the ID and post new
-        await clearStatusMessageId(subscriptionId);
-        console.log(`[syncSubscription] 📤 Posting new status message...`);
-        const postResult = await postToDiscordWithRetry(discordChannel.webhook_url, {
+      if (existingMessageId) {
+        console.log(`[syncSubscription] 🔄 Updating existing status message: ${existingMessageId}`);
+        console.log(`[syncSubscription] Webhook URL: ${discordChannel.webhook_url.substring(0, 50)}...`);
+        const result = await editDiscordMessage(discordChannel.webhook_url, existingMessageId, {
           embeds: [embed],
         });
+        console.log(`[syncSubscription] Edit result: ${JSON.stringify(result)}`);
 
-        if (postResult.success && postResult.messageId) {
-          await setStatusMessageId(subscriptionId, postResult.messageId);
-          console.log(`[syncSubscription] ✅ Posted new status message: ${postResult.messageId}`);
+        if (!result.success) {
+          console.error(`[syncSubscription] ❌ Failed to update status message: ${result.error}`);
+          // If update failed (message deleted), clear the ID and post new
+          await clearStatusMessageId(subscriptionId);
+          console.log(`[syncSubscription] 📤 Posting new status message...`);
+          const postResult = await postToDiscordWithRetry(discordChannel.webhook_url, {
+            embeds: [embed],
+          });
+
+          if (postResult.success && postResult.messageId) {
+            await setStatusMessageId(subscriptionId, postResult.messageId);
+            console.log(`[syncSubscription] ✅ Posted new status message: ${postResult.messageId}`);
+          } else {
+            console.error(`[syncSubscription] ❌ Failed to post status message: ${postResult.error}`);
+          }
         } else {
-          console.error(`[syncSubscription] ❌ Failed to post status message: ${postResult.error}`);
+          console.log(`[syncSubscription] ✅ Updated status message successfully`);
         }
       } else {
-        console.log(`[syncSubscription] ✅ Updated status message successfully`);
-      }
-    } else {
-      console.log(`[syncSubscription] 📤 Posting new status message...`);
-      const result = await postToDiscordWithRetry(discordChannel.webhook_url, {
-        embeds: [embed],
-      });
+        console.log(`[syncSubscription] 📤 Posting new status message...`);
+        console.log(`[syncSubscription] Webhook URL: ${discordChannel.webhook_url.substring(0, 50)}...`);
+        const result = await postToDiscordWithRetry(discordChannel.webhook_url, {
+          embeds: [embed],
+        });
+        console.log(`[syncSubscription] Post result: ${JSON.stringify(result)}`);
 
-      if (result.success && result.messageId) {
-        await setStatusMessageId(subscriptionId, result.messageId);
-        console.log(`[syncSubscription] ✅ Posted status message: ${result.messageId}`);
-      } else {
-        console.error(`[syncSubscription] ❌ Failed to post status message: ${result.error}`);
+        if (result.success && result.messageId) {
+          await setStatusMessageId(subscriptionId, result.messageId);
+          console.log(`[syncSubscription] ✅ Posted status message: ${result.messageId}`);
+        } else {
+          console.error(`[syncSubscription] ❌ Failed to post status message: ${result.error}`);
+        }
       }
     }
-  }
 
     // Update last sync time (we don't need sync tokens since we always query by date range)
     await updateCalendarSubscription(subscriptionId, {

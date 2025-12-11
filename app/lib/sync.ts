@@ -226,7 +226,7 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
     for (const event of result.items) {
       eventIndex++;
       console.log(`[syncSubscription] Processing event ${eventIndex}/${result.items.length}: ${event.summary || event.id}`);
-      
+
       try {
         // Use change detection (will detect new/updated/cancelled)
         const change = await detectEventChange(event, subscriptionId);

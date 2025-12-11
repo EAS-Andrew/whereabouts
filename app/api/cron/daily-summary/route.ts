@@ -16,7 +16,7 @@ function verifyCronAuth(request: Request): boolean {
 
 export async function GET(request: Request) {
   console.log('[Daily Summary] 🌅 Starting daily summary cron job');
-  
+
   try {
     // Verify cron secret if set
     if (process.env.CRON_SECRET && !verifyCronAuth(request)) {
@@ -40,7 +40,7 @@ export async function GET(request: Request) {
 
     for (const key of subscriptionKeys) {
       const subscriptionId = key.replace('calendar_subscription:', '');
-      
+
       try {
         const subData = await redis.hgetall(key);
         if (!subData || Object.keys(subData).length === 0) continue;
@@ -80,7 +80,7 @@ export async function GET(request: Request) {
           orderBy: 'startTime',
         });
 
-        const events = response.data.items || [];
+        const events = (response.data.items || []) as any[];
         console.log(`[Daily Summary] Found ${events.length} events for today`);
 
         // Clear old message ID so we post a fresh one
@@ -95,7 +95,7 @@ export async function GET(request: Request) {
         const result = await postToDiscordWithRetry(webhookUrl, {
           embeds: [embed],
         });
-        
+
         if (result.success && result.messageId) {
           await setStatusMessageId(subscriptionId, result.messageId);
         }

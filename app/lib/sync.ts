@@ -255,7 +255,7 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
   console.log(`[syncSubscription] 📍 Building location status board...`);
   const statusBoard = buildLocationStatus(result.items);
   const embed = formatStatusBoard(statusBoard);
-  
+
   // Get Discord channel
   console.log(`[syncSubscription] 🔍 Looking up Discord channel: ${subscription.discord_channel_id}`);
   const discordChannel = await getDiscordChannel(subscription.discord_channel_id);
@@ -267,7 +267,7 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
 
     // Check if we have an existing status message ID for today
     const existingMessageId = await getStatusMessageId(subscriptionId);
-    
+
     if (existingMessageId) {
       console.log(`[syncSubscription] 🔄 Updating existing status message: ${existingMessageId}`);
       const result = await editDiscordMessage(discordChannel.webhook_url, existingMessageId, {
@@ -282,7 +282,7 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
         const postResult = await postToDiscordWithRetry(discordChannel.webhook_url, {
           embeds: [embed],
         });
-        
+
         if (postResult.success && postResult.messageId) {
           await setStatusMessageId(subscriptionId, postResult.messageId);
           console.log(`[syncSubscription] ✅ Posted new status message: ${postResult.messageId}`);

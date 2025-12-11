@@ -116,7 +116,7 @@ export function formatStatusBoard(status: Map<string, PersonLocation>): any {
 
   // Group people by location
   const byLocation = new Map<string, PersonLocation[]>();
-  
+
   for (const person of status.values()) {
     const loc = person.location || DEFAULT_LOCATION;
     if (!byLocation.has(loc)) {
@@ -132,7 +132,7 @@ export function formatStatusBoard(status: Map<string, PersonLocation>): any {
   for (const location of sortedLocations) {
     const people = byLocation.get(location)!;
     const peopleList = people.map(p => `**${p.name}** (${p.initials})`).join(', ');
-    
+
     fields.push({
       name: location,
       value: peopleList || '_No one_',

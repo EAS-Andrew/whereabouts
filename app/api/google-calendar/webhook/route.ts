@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   const startTime = Date.now();
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🔔 [Webhook] Received Google Calendar push notification');
-  
+
   try {
     const headers = request.headers;
     const channelId = headers.get('X-Goog-Channel-ID');
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     // Find subscription by channel ID
     console.log(`[Webhook] Looking up subscription for channel: ${channelId}`);
     const subscription = await findSubscriptionByGoogleChannel(channelId);
-    
+
     if (!subscription) {
       console.warn(`[Webhook] ⚠️  Subscription not found for channel ID: ${channelId}`);
       return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     // Handle different resource states
     if (resourceState === 'sync' || resourceState === 'exists') {
       console.log(`[Webhook] 🔄 Triggering sync for subscription ${subscription.id} (state: ${resourceState})`);
-      
+
       // Trigger sync asynchronously
       syncSubscription(subscription.id)
         .then(() => {
@@ -89,13 +89,13 @@ export async function POST(request: Request) {
     const responseTime = Date.now() - startTime;
     console.log(`[Webhook] ✅ Webhook processed in ${responseTime}ms, returning 200 OK`);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-    
+
     // Always return 200 immediately
     return NextResponse.json({ received: true, subscriptionId: subscription.id });
   } catch (error) {
     const responseTime = Date.now() - startTime;
     console.error(`[Webhook] ❌ Error processing webhook (${responseTime}ms):`, error);
-    
+
     if (error instanceof Error) {
       console.error('[Webhook] Error details:', {
         message: error.message,
@@ -103,9 +103,9 @@ export async function POST(request: Request) {
         name: error.name,
       });
     }
-    
+
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-    
+
     // Still return 200 to prevent Google from retrying
     return NextResponse.json({ error: 'Internal error' }, { status: 200 });
   }

@@ -124,46 +124,74 @@ export async function setupWatchChannel(
 }
 
 export async function syncSubscription(subscriptionId: string): Promise<void> {
+  console.log(`[syncSubscription] 🔄 Starting sync for subscription: ${subscriptionId}`);
+
   const subscription = await getCalendarSubscription(subscriptionId);
-  if (!subscription || !subscription.active) {
+  if (!subscription) {
+    console.warn(`[syncSubscription] ⚠️  Subscription not found: ${subscriptionId}`);
     return;
   }
 
+  if (!subscription.active) {
+    console.log(`[syncSubscription] ⏸️  Subscription inactive: ${subscriptionId}`);
+    return;
+  }
+
+  console.log(`[syncSubscription] Subscription details:`, {
+    id: subscription.id,
+    calendar: subscription.calendar_summary,
+    has_sync_token: !!subscription.sync_token,
+    user_id: subscription.user_id,
+  });
+
   if (!subscription.sync_token) {
-    // No sync token yet, perform initial sync
+    console.log(`[syncSubscription] 📥 No sync token, performing initial sync for ${subscriptionId}`);
     await performInitialSync(subscriptionId);
     return;
   }
 
+  console.log(`[syncSubscription] 🔍 Looking up user: ${subscription.user_id}`);
   const user = await getUser(subscription.user_id);
   if (!user) {
+    console.error(`[syncSubscription] ❌ User not found: ${subscription.user_id}`);
     throw new Error('User not found');
   }
+  console.log(`[syncSubscription] ✅ User found: ${user.email}`);
 
   let result;
   try {
+    console.log(`[syncSubscription] 📡 Fetching events from Google Calendar (incremental sync)`);
     // Use syncToken for incremental sync
     result = await listEvents(user.google_user_id, subscription.calendar_id, {
       syncToken: subscription.sync_token,
     });
+    console.log(`[syncSubscription] ✅ Received ${result.items.length} events from Google`);
   } catch (error: any) {
     // If sync token is invalid (410 error), clear it and do full sync
     if (error.code === 410 || error.message?.includes('Sync token') || error.message?.includes('410')) {
-      console.log(`Sync token invalid for subscription ${subscriptionId}, performing full sync`);
+      console.warn(`[syncSubscription] ⚠️  Sync token invalid for subscription ${subscriptionId}, performing full sync`);
       await updateCalendarSubscription(subscriptionId, { sync_token: undefined });
       await performInitialSync(subscriptionId);
       return;
     }
+    console.error(`[syncSubscription] ❌ Error fetching events:`, error);
     throw error;
   }
 
   const changes: EventChange[] = [];
+
+  console.log(`[syncSubscription] 🔍 Processing ${result.items.length} events for changes...`);
 
   // Process each event
   for (const event of result.items) {
     const change = await detectEventChange(event, subscriptionId);
 
     if (change) {
+      console.log(`[syncSubscription] 📝 Change detected:`, {
+        type: change.type,
+        event: event.summary || event.id,
+        status: event.status,
+      });
       changes.push(change);
     }
 
@@ -182,21 +210,29 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
     }
   }
 
+  console.log(`[syncSubscription] 📊 Summary: ${changes.length} total changes detected`);
+
   // Filter and send notifications
   const notificationsToSend = changes.filter(change =>
     shouldNotifyForChange(change, subscription)
   );
 
-  console.log(`[syncSubscription] Subscription ${subscriptionId}: ${changes.length} changes detected, ${notificationsToSend.length} notifications to send`);
+  console.log(`[syncSubscription] 📬 ${notificationsToSend.length} notifications will be sent (filtered by settings)`);
 
   // Get Discord channel
+  console.log(`[syncSubscription] 🔍 Looking up Discord channel: ${subscription.discord_channel_id}`);
   const discordChannel = await import('./redis').then(m =>
     m.getDiscordChannel(subscription.discord_channel_id)
   );
 
-  if (discordChannel) {
+  if (!discordChannel) {
+    console.error(`[syncSubscription] ❌ Discord channel not found: ${subscription.discord_channel_id}`);
+  } else {
+    console.log(`[syncSubscription] ✅ Discord channel found: ${discordChannel.name || discordChannel.id}`);
+
     // Send notifications
     for (const change of notificationsToSend) {
+      console.log(`[syncSubscription] 📤 Sending Discord notification for: ${change.event.summary}`);
       const payload = formatEventChangeForDiscord(change, subscription.calendar_summary);
 
       const result = await postToDiscordWithRetry(discordChannel.webhook_url, payload);

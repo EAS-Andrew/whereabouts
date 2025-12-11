@@ -179,19 +179,19 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
     // SIMPLE: Always just get TODAY's events (that's all we need!)
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    
+
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
 
     console.log(`[syncSubscription] 📡 Fetching TODAY's events (${todayStart.toISOString()} to ${todayEnd.toISOString()})`);
-    
+
     result = await listEvents(user.google_user_id, subscription.calendar_id, {
       timeMin: todayStart.toISOString(),
       timeMax: todayEnd.toISOString(),
       singleEvents: true,
       orderBy: 'startTime',
     });
-    
+
     console.log(`[syncSubscription] ✅ Received ${result.items.length} events for today from Google`);
   } catch (error: any) {
     // If sync token is invalid (410 error), clear it and retry without token
@@ -247,7 +247,7 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
 
   console.log(`[syncSubscription] ✅ Finished processing ${result.items.length} events`);
 
-  console.log(`[syncSubscription] 📊 Summary: ${changes.length} total changes detected (${isFirstSync ? 'first sync - all events treated as new' : 'incremental sync'})`);
+  console.log(`[syncSubscription] 📊 Summary: ${changes.length} total changes detected`);
 
   // Filter and send notifications
   const notificationsToSend = changes.filter(change => {

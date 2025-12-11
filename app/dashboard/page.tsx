@@ -8,7 +8,7 @@ export default async function DashboardPage() {
   const session = await getSession();
 
   if (!session) {
-    redirect('/api/auth/signin');
+    redirect('/signin');
   }
 
   return (

@@ -18,41 +18,72 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async signIn({ user, account, profile }) {
-      if (!account || !account.access_token || !account.refresh_token) {
+      // Validate required data
+      if (!account) {
+        console.error('signIn callback: No account provided');
         return false;
       }
 
+      if (!account.access_token) {
+        console.error('signIn callback: No access_token provided');
+        return false;
+      }
+
+      // Note: refresh_token might not be provided on subsequent sign-ins
+      // if user already consented. We handle this by keeping existing refresh_token.
+      if (!account.refresh_token) {
+        console.warn('signIn callback: No refresh_token provided - this may happen on subsequent sign-ins');
+      }
+
       const googleUserId = account.providerAccountId;
-      const email = user.email!;
+      const email = user.email;
+
+      if (!googleUserId || !email) {
+        console.error('signIn callback: Missing googleUserId or email', { googleUserId, email });
+        return false;
+      }
 
       try {
         let existingUser = await getUser(googleUserId);
 
         if (!existingUser) {
+          // First time sign-in - refresh_token should be present
+          if (!account.refresh_token) {
+            console.error('signIn callback: First sign-in requires refresh_token but none provided');
+            return false;
+          }
+
           // Create new user
           await createUser({
             google_user_id: googleUserId,
             email,
             access_token: account.access_token,
-            refresh_token: account.refresh_token!,
+            refresh_token: account.refresh_token,
             access_token_expires_at: account.expires_at
               ? account.expires_at * 1000
               : Date.now() + 3600 * 1000,
           });
+          console.log('Created new user:', email);
         } else {
-          // Update tokens
+          // Update tokens - preserve existing refresh_token if new one not provided
           await updateUser(googleUserId, {
             access_token: account.access_token,
-            refresh_token: account.refresh_token!,
+            refresh_token: account.refresh_token || existingUser.refresh_token,
             access_token_expires_at: account.expires_at
               ? account.expires_at * 1000
               : Date.now() + 3600 * 1000,
           });
+          console.log('Updated user tokens:', email);
         }
 
         return true;
       } catch (error) {
         console.error('Error in signIn callback:', error);
+        // Log more details for debugging
+        if (error instanceof Error) {
+          console.error('Error message:', error.message);
+          console.error('Error stack:', error.stack);
+        }
         return false;
       }
     },
@@ -86,7 +117,7 @@ export const authOptions: NextAuthOptions = {
     },
   },
   pages: {
-    signIn: '/api/auth/signin',
+    signIn: '/signin',
   },
   session: {
     strategy: 'jwt',

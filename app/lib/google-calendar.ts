@@ -3,17 +3,25 @@ import { getUser, updateUser } from './redis';
 import type { GoogleCalendarEvent } from './types';
 
 export async function getGoogleCalendarClient(googleUserId: string) {
+  console.log(`[getGoogleCalendarClient] Getting client for user: ${googleUserId}`);
+  
   const user = await getUser(googleUserId);
   if (!user) {
+    console.error(`[getGoogleCalendarClient] User not found: ${googleUserId}`);
     throw new Error('User not found');
   }
+  console.log(`[getGoogleCalendarClient] User found: ${user.email}`);
 
   // Check if token needs refresh (refresh 5 minutes before expiry to be safe)
   let accessToken = user.access_token;
   const now = Date.now();
   const refreshBuffer = 5 * 60 * 1000; // 5 minutes
+  const expiresIn = user.access_token_expires_at - now;
+  
+  console.log(`[getGoogleCalendarClient] Token expires in ${Math.round(expiresIn / 1000)}s`);
 
   if (user.access_token_expires_at < now + refreshBuffer) {
+    console.log(`[getGoogleCalendarClient] Token expired/expiring soon, refreshing...`);
     // Token expired or about to expire, refresh it
     try {
       const refreshed = await refreshAccessToken(user.refresh_token);
@@ -23,10 +31,13 @@ export async function getGoogleCalendarClient(googleUserId: string) {
         access_token: refreshed.access_token,
         access_token_expires_at: Date.now() + refreshed.expires_in * 1000,
       });
+      console.log(`[getGoogleCalendarClient] ✅ Token refreshed successfully`);
     } catch (error) {
-      console.error(`Failed to refresh access token for user ${googleUserId}:`, error);
+      console.error(`[getGoogleCalendarClient] ❌ Failed to refresh access token for user ${googleUserId}:`, error);
       throw new Error('Failed to refresh access token. User may need to re-authenticate.');
     }
+  } else {
+    console.log(`[getGoogleCalendarClient] Token still valid, using existing token`);
   }
 
   const oauth2Client = new google.auth.OAuth2(
@@ -83,29 +94,49 @@ export async function listEvents(
     maxResults?: number;
     singleEvents?: boolean;
     orderBy?: 'startTime' | 'updated';
+    pageToken?: string;
   }
 ) {
-  const calendar = await getGoogleCalendarClient(googleUserId);
+  console.log(`[listEvents] Fetching events for user ${googleUserId}, calendar ${calendarId}`);
+  console.log(`[listEvents] Options:`, options);
+  
+  try {
+    console.log(`[listEvents] Getting Google Calendar client...`);
+    const calendar = await getGoogleCalendarClient(googleUserId);
+    console.log(`[listEvents] ✅ Got calendar client`);
 
-  const params: any = {
-    calendarId,
-    ...options,
-  };
+    const params: any = {
+      calendarId,
+      ...options,
+    };
 
-  if (options?.singleEvents !== undefined) {
-    params.singleEvents = options.singleEvents;
+    if (options?.singleEvents !== undefined) {
+      params.singleEvents = options.singleEvents;
+    }
+    if (options?.orderBy) {
+      params.orderBy = options.orderBy;
+    }
+
+    console.log(`[listEvents] Calling Google Calendar API with params:`, JSON.stringify(params, null, 2));
+    const response = await calendar.events.list(params);
+    console.log(`[listEvents] ✅ API call succeeded, got ${response.data.items?.length || 0} events`);
+
+    return {
+      items: (response.data.items || []) as GoogleCalendarEvent[],
+      nextPageToken: response.data.nextPageToken,
+      nextSyncToken: response.data.nextSyncToken,
+    };
+  } catch (error) {
+    console.error(`[listEvents] ❌ Error fetching events:`, error);
+    if (error instanceof Error) {
+      console.error(`[listEvents] Error details:`, {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      });
+    }
+    throw error;
   }
-  if (options?.orderBy) {
-    params.orderBy = options.orderBy;
-  }
-
-  const response = await calendar.events.list(params);
-
-  return {
-    items: (response.data.items || []) as GoogleCalendarEvent[],
-    nextPageToken: response.data.nextPageToken,
-    nextSyncToken: response.data.nextSyncToken,
-  };
 }
 
 export async function watchCalendar(

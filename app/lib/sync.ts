@@ -14,7 +14,7 @@ import type { EventChange, GoogleCalendarEvent } from './types';
 
 export async function performInitialSync(subscriptionId: string): Promise<void> {
   console.log(`[performInitialSync] Starting initial sync for subscription ${subscriptionId}`);
-  
+
   try {
     const subscription = await getCalendarSubscription(subscriptionId);
     if (!subscription) {
@@ -38,7 +38,7 @@ export async function performInitialSync(subscriptionId: string): Promise<void> 
 
     do {
       console.log(`[performInitialSync] Fetching events page (token: ${nextPageToken || 'first page'})...`);
-      
+
       const result = await listEvents(user.google_user_id, subscription.calendar_id, {
         timeMin,
         singleEvents: true,
@@ -46,29 +46,29 @@ export async function performInitialSync(subscriptionId: string): Promise<void> 
         maxResults: 2500,
         ...(nextPageToken && { pageToken: nextPageToken }),
       });
-      
+
       console.log(`[performInitialSync] Received ${result.items.length} events`);
 
-    // Cache all events
-    for (const event of result.items) {
-      await cacheEvent(subscriptionId, {
-        event_id: event.id,
-        etag: event.etag,
-        start_time: event.start?.dateTime || event.start?.date || '',
-        end_time: event.end?.dateTime || event.end?.date || '',
-        summary: event.summary || '',
-        location: event.location || '',
-        status: event.status,
-        last_seen_at: new Date().toISOString(),
-      });
-      totalEventsCached++;
-    }
+      // Cache all events
+      for (const event of result.items) {
+        await cacheEvent(subscriptionId, {
+          event_id: event.id,
+          etag: event.etag,
+          start_time: event.start?.dateTime || event.start?.date || '',
+          end_time: event.end?.dateTime || event.end?.date || '',
+          summary: event.summary || '',
+          location: event.location || '',
+          status: event.status,
+          last_seen_at: new Date().toISOString(),
+        });
+        totalEventsCached++;
+      }
 
-    nextPageToken = result.nextPageToken;
-    if (result.nextSyncToken) {
-      nextSyncToken = result.nextSyncToken;
-    }
-  } while (nextPageToken);
+      nextPageToken = result.nextPageToken;
+      if (result.nextSyncToken) {
+        nextSyncToken = result.nextSyncToken;
+      }
+    } while (nextPageToken);
 
     // Store sync token
     if (nextSyncToken) {

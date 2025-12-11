@@ -149,17 +149,18 @@ export async function setupWatchChannel(
 
 export async function syncSubscription(subscriptionId: string): Promise<void> {
   console.log(`[syncSubscription] 🔄 Starting sync for subscription: ${subscriptionId}`);
+  
+  try {
+    const subscription = await getCalendarSubscription(subscriptionId);
+    if (!subscription) {
+      console.warn(`[syncSubscription] ⚠️  Subscription not found: ${subscriptionId}`);
+      return;
+    }
 
-  const subscription = await getCalendarSubscription(subscriptionId);
-  if (!subscription) {
-    console.warn(`[syncSubscription] ⚠️  Subscription not found: ${subscriptionId}`);
-    return;
-  }
-
-  if (!subscription.active) {
-    console.log(`[syncSubscription] ⏸️  Subscription inactive: ${subscriptionId}`);
-    return;
-  }
+    if (!subscription.active) {
+      console.log(`[syncSubscription] ⏸️  Subscription inactive: ${subscriptionId}`);
+      return;
+    }
 
   console.log(`[syncSubscription] Subscription details:`, {
     id: subscription.id,
@@ -307,13 +308,24 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
     }
   }
 
-  // Update last sync time (we don't need sync tokens since we always query by date range)
-  await updateCalendarSubscription(subscriptionId, {
-    last_sync_at: new Date().toISOString(),
-  });
-  console.log(`[syncSubscription] ✅ Updated last sync time for subscription ${subscriptionId}`);
+    // Update last sync time (we don't need sync tokens since we always query by date range)
+    await updateCalendarSubscription(subscriptionId, {
+      last_sync_at: new Date().toISOString(),
+    });
+    console.log(`[syncSubscription] ✅ Updated last sync time for subscription ${subscriptionId}`);
 
-  console.log(`[syncSubscription] ✅ Sync completed for subscription ${subscriptionId}`);
+    console.log(`[syncSubscription] ✅ Sync completed for subscription ${subscriptionId}`);
+  } catch (error) {
+    console.error(`[syncSubscription] ❌ Fatal error in sync for ${subscriptionId}:`, error);
+    if (error instanceof Error) {
+      console.error(`[syncSubscription] Error details:`, {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      });
+    }
+    throw error; // Re-throw so webhook can log it
+  }
 }
 
 async function detectEventChange(

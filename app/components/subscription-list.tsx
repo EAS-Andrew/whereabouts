@@ -81,13 +81,13 @@ export function SubscriptionList() {
   }
 
   if (loading) {
-    return <div className="text-gray-600">Loading subscriptions...</div>;
+    return <div className="text-gray-600 dark:text-gray-400">Loading subscriptions...</div>;
   }
 
   if (subscriptions.length === 0) {
     return (
-      <div className="rounded-md bg-gray-50 p-4">
-        <p className="text-sm text-gray-600">No active subscriptions yet.</p>
+      <div className="rounded-md bg-gray-50 dark:bg-gray-700/50 p-4">
+        <p className="text-sm text-gray-600 dark:text-gray-400">No active subscriptions yet.</p>
       </div>
     );
   }
@@ -95,8 +95,8 @@ export function SubscriptionList() {
   return (
     <div className="space-y-4">
       {error && (
-        <div className="rounded-md bg-red-50 p-4">
-          <p className="text-sm text-red-800">{error}</p>
+        <div className="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
+          <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
         </div>
       )}
 
@@ -109,27 +109,28 @@ export function SubscriptionList() {
           return (
             <div
               key={subscription.id}
-              className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+              className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700/50 p-4 shadow-sm dark:shadow-gray-950"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center space-x-2">
-                    <h3 className="text-lg font-medium text-gray-900">
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
                       {subscription.calendar_summary}
                     </h3>
                     <span
-                      className={`rounded-full px-2 py-1 text-xs font-medium ${subscription.active
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-800'
-                        }`}
+                      className={`rounded-full px-2 py-1 text-xs font-medium ${
+                        subscription.active
+                          ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300'
+                      }`}
                     >
                       {subscription.active ? 'Active' : 'Inactive'}
                     </span>
                   </div>
 
-                  <div className="mt-2 space-y-1 text-sm text-gray-600">
+                  <div className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
                     <div>
-                      <span className="font-medium">Notifications:</span>{' '}
+                      <span className="font-medium text-gray-700 dark:text-gray-300">Notifications:</span>{' '}
                       {[
                         subscription.notify_new_events && 'New',
                         subscription.notify_updates && 'Updates',
@@ -141,14 +142,14 @@ export function SubscriptionList() {
 
                     {subscription.notify_window_minutes > 0 && (
                       <div>
-                        <span className="font-medium">Window:</span>{' '}
+                        <span className="font-medium text-gray-700 dark:text-gray-300">Window:</span>{' '}
                         {subscription.notify_window_minutes} minutes
                       </div>
                     )}
 
                     {subscription.last_sync_at && (
                       <div>
-                        <span className="font-medium">Last sync:</span>{' '}
+                        <span className="font-medium text-gray-700 dark:text-gray-300">Last sync:</span>{' '}
                         {formatDistanceToNow(new Date(subscription.last_sync_at), {
                           addSuffix: true,
                         })}
@@ -156,7 +157,7 @@ export function SubscriptionList() {
                     )}
 
                     {expirationWarning && subscription.active && (
-                      <div className="text-yellow-600 font-medium">
+                      <div className="text-yellow-600 dark:text-yellow-400 font-medium">
                         ⚠️ Watch channel expiring soon
                       </div>
                     )}
@@ -168,13 +169,13 @@ export function SubscriptionList() {
                     onClick={() =>
                       handleToggleActive(subscription.id, subscription.active)
                     }
-                    className="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
                   >
                     {subscription.active ? 'Deactivate' : 'Activate'}
                   </button>
                   <button
                     onClick={() => handleDelete(subscription.id)}
-                    className="rounded-md border border-red-300 bg-white px-3 py-1 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="rounded-md border border-red-300 dark:border-red-700 bg-white dark:bg-gray-700 px-3 py-1 text-sm font-medium text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 focus:outline-none focus:ring-2 focus:ring-red-500 dark:focus:ring-red-400"
                   >
                     Delete
                   </button>

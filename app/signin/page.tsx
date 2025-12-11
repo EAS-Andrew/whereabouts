@@ -18,26 +18,26 @@ export default async function SignInPage({
   const errorDescription = params.error_description;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md space-y-8 rounded-lg bg-white p-8 shadow-md">
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="w-full max-w-md space-y-8 rounded-lg bg-white dark:bg-gray-800 p-8 shadow-md dark:shadow-gray-950">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
+          <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
             Sign in to Whereabouts
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
             Connect your Google Calendar to Discord
           </p>
         </div>
 
         {error && (
-          <div className="rounded-md bg-red-50 p-4">
-            <div className="text-sm text-red-800">
+          <div className="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
+            <div className="text-sm text-red-800 dark:text-red-200">
               <p className="font-medium">Authentication Error: {error}</p>
 
               {/* Show Google's error description if available */}
               {errorDescription && (
-                <div className="mt-2 p-2 bg-red-100 rounded border border-red-200">
-                  <p className="font-semibold text-xs uppercase text-red-900 mb-1">Google Error Details:</p>
+                <div className="mt-2 p-2 bg-red-100 dark:bg-red-900/30 rounded border border-red-200 dark:border-red-800">
+                  <p className="font-semibold text-xs uppercase text-red-900 dark:text-red-100 mb-1">Google Error Details:</p>
                   <p className="text-sm font-mono break-words">{errorDescription}</p>
                 </div>
               )}
@@ -58,13 +58,13 @@ export default async function SignInPage({
                 {!['Configuration', 'AccessDenied', 'Verification', 'google', 'OAuthAccountNotLinked', 'OAuthCallback'].includes(error) &&
                   `Unknown error: ${error}. ${errorDescription || 'Check server logs for details.'}`}
               </p>
-              <p className="mt-2 text-xs text-red-700">
+              <p className="mt-2 text-xs text-red-700 dark:text-red-300">
                 <strong>Check your server terminal/console for detailed error logs.</strong>
               </p>
               <p className="mt-2 text-xs">
                 Common fixes:
                 <ul className="list-disc list-inside mt-1 space-y-1">
-                  <li>Redirect URI must be: <code className="bg-red-100 px-1 rounded">http://localhost:3000/api/auth/callback/google</code></li>
+                  <li>Redirect URI must be: <code className="bg-red-100 dark:bg-red-900/40 px-1 rounded">http://localhost:3000/api/auth/callback/google</code></li>
                   <li>Ensure Google Calendar API is enabled</li>
                   <li>Verify OAuth consent screen is configured with Calendar scope</li>
                   <li>Add yourself as a test user (for external apps)</li>
@@ -72,9 +72,9 @@ export default async function SignInPage({
                   <li>Restart dev server after changing .env.local</li>
                 </ul>
               </p>
-              <div className="mt-3 pt-3 border-t border-red-200">
-                <p className="text-xs font-mono text-red-600">
-                  Debug endpoint: <a href="/api/auth/debug" target="_blank" className="underline">/api/auth/debug</a>
+              <div className="mt-3 pt-3 border-t border-red-200 dark:border-red-800">
+                <p className="text-xs font-mono text-red-600 dark:text-red-400">
+                  Debug endpoint: <a href="/api/auth/debug" target="_blank" className="underline hover:text-red-800 dark:hover:text-red-200">/api/auth/debug</a>
                 </p>
               </div>
             </div>

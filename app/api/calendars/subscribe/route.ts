@@ -55,23 +55,22 @@ export async function POST(request: Request) {
     // Get base URL for webhook
     const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
 
-    // Perform initial sync
-    try {
-      await performInitialSync(subscription.id);
-    } catch (error) {
-      console.error('Error during initial sync:', error);
-      // Continue anyway - we can sync later
-    }
+    // Set up watch channel asynchronously (don't block response)
+    // No initial sync needed - watch channel will catch all events going forward
+    setupWatchChannel(subscription.id, baseUrl)
+      .then(() => {
+        console.log(`[Subscribe] Watch channel setup completed for ${subscription.id}`);
+      })
+      .catch((error) => {
+        console.error(`[Subscribe] Error setting up watch channel for ${subscription.id}:`, error);
+        // Subscription is still created, watch can be retried via cron
+      });
 
-    // Set up watch channel
-    try {
-      await setupWatchChannel(subscription.id, baseUrl);
-    } catch (error) {
-      console.error('Error setting up watch channel:', error);
-      // Continue anyway - user can retry later
-    }
-
-    return NextResponse.json({ subscription });
+    // Return immediately - watch channel will catch all future events
+    return NextResponse.json({
+      subscription,
+      message: 'Subscription created. You will receive notifications for new and updated events.'
+    });
   } catch (error) {
     console.error('Error creating subscription:', error);
     return NextResponse.json(

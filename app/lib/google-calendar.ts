@@ -119,14 +119,15 @@ export async function listEvents(
 
     console.log(`[listEvents] Calling Google Calendar API with params:`, JSON.stringify(params, null, 2));
     const startTime = Date.now();
-    
-    const response = await Promise.race([
-      calendar.events.list(params),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Google Calendar API call timed out after 30 seconds')), 30000)
-      )
-    ]) as Awaited<ReturnType<typeof calendar.events.list>>;
-    
+
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Google Calendar API call timed out after 30 seconds')), 30000)
+    );
+
+    const apiCall = calendar.events.list(params);
+    const response = await Promise.race([apiCall, timeoutPromise]);
+
     const duration = Date.now() - startTime;
     console.log(`[listEvents] ✅ API call succeeded in ${duration}ms, got ${response.data.items?.length || 0} events`);
 

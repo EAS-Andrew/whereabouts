@@ -28,7 +28,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
     }
 
-    if (subscription.user_id !== user.id) {
+    if (subscription.user_id !== user.google_user_id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -82,7 +82,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
     }
 
-    if (subscription.user_id !== user.id) {
+    if (subscription.user_id !== user.google_user_id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

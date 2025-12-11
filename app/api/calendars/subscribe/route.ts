@@ -35,13 +35,13 @@ export async function POST(request: Request) {
 
     // Verify Discord channel belongs to user
     const discordChannel = await getDiscordChannel(discord_channel_id);
-    if (!discordChannel || discordChannel.user_id !== user.id) {
+    if (!discordChannel || discordChannel.user_id !== user.google_user_id) {
       return NextResponse.json({ error: 'Discord channel not found' }, { status: 404 });
     }
 
     // Create subscription
     const subscription = await createCalendarSubscription({
-      user_id: user.id,
+      user_id: user.google_user_id,
       calendar_id,
       calendar_summary: calendar_summary || calendar_id,
       discord_channel_id,

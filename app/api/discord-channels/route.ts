@@ -15,7 +15,7 @@ export async function GET() {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const channels = await listUserDiscordChannels(user.id);
+    const channels = await listUserDiscordChannels(user.google_user_id);
 
     return NextResponse.json({ channels });
   } catch (error) {
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     }
 
     const channel = await createDiscordChannel({
-      user_id: user.id,
+      user_id: user.google_user_id,
       webhook_url,
       name: name || undefined,
       is_default: is_default || false,

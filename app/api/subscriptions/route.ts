@@ -15,7 +15,7 @@ export async function GET() {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const subscriptions = await listUserSubscriptions(user.id);
+    const subscriptions = await listUserSubscriptions(user.google_user_id);
 
     return NextResponse.json({ subscriptions });
   } catch (error) {

@@ -123,11 +123,10 @@ export default function DebugPage() {
 
         {message && (
           <div
-            className={`p-4 rounded-md ${
-              message.type === 'success'
+            className={`p-4 rounded-md ${message.type === 'success'
                 ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200'
                 : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200'
-            }`}
+              }`}
           >
             {message.text}
           </div>
@@ -183,11 +182,10 @@ export default function DebugPage() {
                         {sub.calendar_summary}
                       </h3>
                       <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          sub.active
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${sub.active
                             ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
                             : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300'
-                        }`}
+                          }`}
                       >
                         {sub.active ? 'Active' : 'Inactive'}
                       </span>
@@ -275,29 +273,26 @@ export default function DebugPage() {
                   <div className="font-medium text-gray-700 dark:text-gray-300 mb-2">Notification Settings</div>
                   <div className="flex flex-wrap gap-4 text-sm">
                     <span
-                      className={`px-2 py-1 rounded ${
-                        sub.notify_new_events
+                      className={`px-2 py-1 rounded ${sub.notify_new_events
                           ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
                           : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                      }`}
+                        }`}
                     >
                       New Events: {sub.notify_new_events ? 'ON' : 'OFF'}
                     </span>
                     <span
-                      className={`px-2 py-1 rounded ${
-                        sub.notify_updates
+                      className={`px-2 py-1 rounded ${sub.notify_updates
                           ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
                           : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                      }`}
+                        }`}
                     >
                       Updates: {sub.notify_updates ? 'ON' : 'OFF'}
                     </span>
                     <span
-                      className={`px-2 py-1 rounded ${
-                        sub.notify_cancellations
+                      className={`px-2 py-1 rounded ${sub.notify_cancellations
                           ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
                           : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                      }`}
+                        }`}
                     >
                       Cancellations: {sub.notify_cancellations ? 'ON' : 'OFF'}
                     </span>

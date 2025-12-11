@@ -27,7 +27,10 @@ export async function POST(request: Request) {
 
       subscriptions.push({
         id: key.replace('calendar_subscription:', ''),
-        ...subData,
+        calendar_summary: subData.calendar_summary,
+        calendar_id: subData.calendar_id,
+        user_id: subData.user_id,
+        discord_channel_id: subData.discord_channel_id,
       });
     }
 
@@ -54,9 +57,9 @@ export async function POST(request: Request) {
         const webhookUrl = decrypt(channelData.webhook_url as string);
 
         // Fetch today's events
-        const calendar = await getGoogleCalendarClient(sub.user_id as string);
+        const calendar = await getGoogleCalendarClient(sub.user_id);
         const response = await calendar.events.list({
-          calendarId: sub.calendar_id as string,
+          calendarId: sub.calendar_id,
           timeMin: todayStart.toISOString(),
           timeMax: todayEnd.toISOString(),
           singleEvents: true,

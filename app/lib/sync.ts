@@ -165,9 +165,9 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
   });
 
   if (!subscription.sync_token) {
-    console.log(`[syncSubscription] 📥 No sync token, performing initial sync for ${subscriptionId}`);
-    await performInitialSync(subscriptionId);
-    return;
+    console.log(`[syncSubscription] 📥 No sync token yet - this is first sync, will get sync token from Google`);
+    // Don't do initial sync - just get the sync token from this first incremental call
+    // Any events that exist will be treated as "new" which is fine
   }
 
   console.log(`[syncSubscription] 🔍 Looking up user: ${subscription.user_id}`);
@@ -180,22 +180,41 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
 
   let result;
   try {
-    console.log(`[syncSubscription] 📡 Fetching events from Google Calendar (incremental sync)`);
-    // Use syncToken for incremental sync
-    result = await listEvents(user.google_user_id, subscription.calendar_id, {
-      syncToken: subscription.sync_token,
-    });
+    if (subscription.sync_token) {
+      console.log(`[syncSubscription] 📡 Fetching events from Google Calendar (incremental sync with token)`);
+      // Use syncToken for incremental sync
+      result = await listEvents(user.google_user_id, subscription.calendar_id, {
+        syncToken: subscription.sync_token,
+      });
+    } else {
+      console.log(`[syncSubscription] 📡 Fetching events from Google Calendar (first sync, no token)`);
+      // First sync - get events and a sync token for future use
+      // Only get events from now forward to keep it light
+      const timeMin = new Date().toISOString();
+      result = await listEvents(user.google_user_id, subscription.calendar_id, {
+        timeMin,
+        singleEvents: true,
+        orderBy: 'startTime',
+      });
+    }
     console.log(`[syncSubscription] ✅ Received ${result.items.length} events from Google`);
   } catch (error: any) {
-    // If sync token is invalid (410 error), clear it and do full sync
+    // If sync token is invalid (410 error), clear it and retry without token
     if (error.code === 410 || error.message?.includes('Sync token') || error.message?.includes('410')) {
-      console.warn(`[syncSubscription] ⚠️  Sync token invalid for subscription ${subscriptionId}, performing full sync`);
+      console.warn(`[syncSubscription] ⚠️  Sync token invalid for subscription ${subscriptionId}, clearing and retrying`);
       await updateCalendarSubscription(subscriptionId, { sync_token: undefined });
-      await performInitialSync(subscriptionId);
-      return;
+      // Retry this same sync without the token
+      const timeMin = new Date().toISOString();
+      result = await listEvents(user.google_user_id, subscription.calendar_id, {
+        timeMin,
+        singleEvents: true,
+        orderBy: 'startTime',
+      });
+      console.log(`[syncSubscription] ✅ Retry succeeded, received ${result.items.length} events`);
+    } else {
+      console.error(`[syncSubscription] ❌ Error fetching events:`, error);
+      throw error;
     }
-    console.error(`[syncSubscription] ❌ Error fetching events:`, error);
-    throw error;
   }
 
   const changes: EventChange[] = [];

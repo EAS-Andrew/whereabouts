@@ -161,10 +161,10 @@ export async function getCalendarSubscription(subscriptionId: string): Promise<C
   // Convert string values from Redis to proper types
   return {
     ...subData,
-    active: subData.active === 'true' || subData.active === true,
-    notify_new_events: subData.notify_new_events === 'true' || subData.notify_new_events === true,
-    notify_updates: subData.notify_updates === 'true' || subData.notify_updates === true,
-    notify_cancellations: subData.notify_cancellations === 'true' || subData.notify_cancellations === true,
+    active: (subData.active as any) === 'true' || (subData.active as any) === true,
+    notify_new_events: (subData.notify_new_events as any) === 'true' || (subData.notify_new_events as any) === true,
+    notify_updates: (subData.notify_updates as any) === 'true' || (subData.notify_updates as any) === true,
+    notify_cancellations: (subData.notify_cancellations as any) === 'true' || (subData.notify_cancellations as any) === true,
     notify_window_minutes: parseInt(subData.notify_window_minutes as string) || 0,
     google_channel_expiration: subData.google_channel_expiration ? parseInt(subData.google_channel_expiration as string) : undefined,
   } as CalendarSubscription;

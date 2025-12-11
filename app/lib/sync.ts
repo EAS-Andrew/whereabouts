@@ -116,7 +116,7 @@ export async function setupWatchChannel(
     google_resource_id: watchResult.resourceId || undefined,
     google_channel_expiration: watchResult.expiration,
   });
-  
+
   const expirationDate = watchResult.expiration ? new Date(watchResult.expiration) : 'unknown';
   console.log(`[setupWatchChannel] Watch channel established for subscription ${subscriptionId}, expires: ${expirationDate}`);
 }

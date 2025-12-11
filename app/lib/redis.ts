@@ -43,6 +43,7 @@ export async function getUser(googleUserId: string): Promise<User | null> {
     ...user,
     access_token: decrypt(user.access_token),
     refresh_token: decrypt(user.refresh_token),
+    access_token_expires_at: parseInt(user.access_token_expires_at as any) || 0,
   };
 }
 
@@ -110,6 +111,7 @@ export async function getDiscordChannel(channelId: string): Promise<DiscordChann
   return {
     ...channel,
     webhook_url: decrypt(channel.webhook_url),
+    is_default: channelData.is_default === 'true' || channelData.is_default === true,
   };
 }
 
@@ -156,7 +158,16 @@ export async function getCalendarSubscription(subscriptionId: string): Promise<C
   const subData = await redis.hgetall(`calendar_subscription:${subscriptionId}`);
   if (!subData || Object.keys(subData).length === 0) return null;
 
-  return subData as unknown as CalendarSubscription;
+  // Convert string values from Redis to proper types
+  return {
+    ...subData,
+    active: subData.active === 'true' || subData.active === true,
+    notify_new_events: subData.notify_new_events === 'true' || subData.notify_new_events === true,
+    notify_updates: subData.notify_updates === 'true' || subData.notify_updates === true,
+    notify_cancellations: subData.notify_cancellations === 'true' || subData.notify_cancellations === true,
+    notify_window_minutes: parseInt(subData.notify_window_minutes as string) || 0,
+    google_channel_expiration: subData.google_channel_expiration ? parseInt(subData.google_channel_expiration as string) : undefined,
+  } as CalendarSubscription;
 }
 
 export async function listUserSubscriptions(userId: string): Promise<CalendarSubscription[]> {

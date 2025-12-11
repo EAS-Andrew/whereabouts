@@ -8,17 +8,25 @@ export async function getGoogleCalendarClient(googleUserId: string) {
     throw new Error('User not found');
   }
 
-  // Check if token needs refresh
+  // Check if token needs refresh (refresh 5 minutes before expiry to be safe)
   let accessToken = user.access_token;
-  if (user.access_token_expires_at < Date.now()) {
-    // Token expired, refresh it
-    const refreshed = await refreshAccessToken(user.refresh_token);
-    accessToken = refreshed.access_token;
+  const now = Date.now();
+  const refreshBuffer = 5 * 60 * 1000; // 5 minutes
 
-    await updateUser(googleUserId, {
-      access_token: refreshed.access_token,
-      access_token_expires_at: Date.now() + refreshed.expires_in * 1000,
-    });
+  if (user.access_token_expires_at < now + refreshBuffer) {
+    // Token expired or about to expire, refresh it
+    try {
+      const refreshed = await refreshAccessToken(user.refresh_token);
+      accessToken = refreshed.access_token;
+
+      await updateUser(googleUserId, {
+        access_token: refreshed.access_token,
+        access_token_expires_at: Date.now() + refreshed.expires_in * 1000,
+      });
+    } catch (error) {
+      console.error(`Failed to refresh access token for user ${googleUserId}:`, error);
+      throw new Error('Failed to refresh access token. User may need to re-authenticate.');
+    }
   }
 
   const oauth2Client = new google.auth.OAuth2(

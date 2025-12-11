@@ -13,14 +13,15 @@ import { formatEventChangeForDiscord } from './message-formatting';
 import type { EventChange, GoogleCalendarEvent } from './types';
 
 export async function performInitialSync(subscriptionId: string): Promise<void> {
+  console.log(`[performInitialSync] Starting initial sync for subscription ${subscriptionId}`);
   const subscription = await getCalendarSubscription(subscriptionId);
   if (!subscription) {
-    throw new Error('Subscription not found');
+    throw new Error(`Subscription not found: ${subscriptionId}`);
   }
 
   const user = await getUser(subscription.user_id);
   if (!user) {
-    throw new Error('User not found');
+    throw new Error(`User not found for subscription ${subscriptionId}: ${subscription.user_id}`);
   }
 
   // Perform initial sync - get events from now going forward
@@ -35,7 +36,6 @@ export async function performInitialSync(subscriptionId: string): Promise<void> 
       singleEvents: true,
       orderBy: 'startTime',
       maxResults: 2500,
-      syncToken: nextPageToken ? undefined : undefined,
       ...(nextPageToken && { pageToken: nextPageToken }),
     });
 
@@ -65,6 +65,9 @@ export async function performInitialSync(subscriptionId: string): Promise<void> 
       sync_token: nextSyncToken,
       last_sync_at: new Date().toISOString(),
     });
+    console.log(`[performInitialSync] Completed initial sync for subscription ${subscriptionId}, cached ${result.items.length} events`);
+  } else {
+    console.warn(`[performInitialSync] No sync token received for subscription ${subscriptionId}`);
   }
 }
 
@@ -72,14 +75,15 @@ export async function setupWatchChannel(
   subscriptionId: string,
   baseUrl: string
 ): Promise<void> {
+  console.log(`[setupWatchChannel] Setting up watch channel for subscription ${subscriptionId}`);
   const subscription = await getCalendarSubscription(subscriptionId);
   if (!subscription) {
-    throw new Error('Subscription not found');
+    throw new Error(`Subscription not found: ${subscriptionId}`);
   }
 
   const user = await getUser(subscription.user_id);
   if (!user) {
-    throw new Error('User not found');
+    throw new Error(`User not found for subscription ${subscriptionId}: ${subscription.user_id}`);
   }
 
   // Stop existing channel if any
@@ -112,6 +116,9 @@ export async function setupWatchChannel(
     google_resource_id: watchResult.resourceId || undefined,
     google_channel_expiration: watchResult.expiration,
   });
+  
+  const expirationDate = watchResult.expiration ? new Date(watchResult.expiration) : 'unknown';
+  console.log(`[setupWatchChannel] Watch channel established for subscription ${subscriptionId}, expires: ${expirationDate}`);
 }
 
 export async function syncSubscription(subscriptionId: string): Promise<void> {
@@ -131,10 +138,22 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
     throw new Error('User not found');
   }
 
-  // Use syncToken for incremental sync
-  const result = await listEvents(user.google_user_id, subscription.calendar_id, {
-    syncToken: subscription.sync_token,
-  });
+  let result;
+  try {
+    // Use syncToken for incremental sync
+    result = await listEvents(user.google_user_id, subscription.calendar_id, {
+      syncToken: subscription.sync_token,
+    });
+  } catch (error: any) {
+    // If sync token is invalid (410 error), clear it and do full sync
+    if (error.code === 410 || error.message?.includes('Sync token') || error.message?.includes('410')) {
+      console.log(`Sync token invalid for subscription ${subscriptionId}, performing full sync`);
+      await updateCalendarSubscription(subscriptionId, { sync_token: undefined });
+      await performInitialSync(subscriptionId);
+      return;
+    }
+    throw error;
+  }
 
   const changes: EventChange[] = [];
 
@@ -166,6 +185,8 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
     shouldNotifyForChange(change, subscription)
   );
 
+  console.log(`[syncSubscription] Subscription ${subscriptionId}: ${changes.length} changes detected, ${notificationsToSend.length} notifications to send`);
+
   // Get Discord channel
   const discordChannel = await import('./redis').then(m =>
     m.getDiscordChannel(subscription.discord_channel_id)
@@ -180,11 +201,15 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
 
       if (!result.success) {
         console.error(
-          `Failed to send Discord notification for subscription ${subscriptionId}:`,
+          `[syncSubscription] Failed to send Discord notification for subscription ${subscriptionId}:`,
           result.error
         );
+      } else {
+        console.log(`[syncSubscription] Sent ${change.type} notification for event: ${change.event.summary}`);
       }
     }
+  } else {
+    console.warn(`[syncSubscription] Discord channel not found for subscription ${subscriptionId}: ${subscription.discord_channel_id}`);
   }
 
   // Update sync token

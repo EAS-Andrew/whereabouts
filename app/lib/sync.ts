@@ -29,6 +29,7 @@ export async function performInitialSync(subscriptionId: string): Promise<void> 
 
   let nextPageToken: string | null | undefined;
   let nextSyncToken: string | null | undefined;
+  let totalEventsCached = 0;
 
   do {
     const result = await listEvents(user.google_user_id, subscription.calendar_id, {
@@ -51,6 +52,7 @@ export async function performInitialSync(subscriptionId: string): Promise<void> 
         status: event.status,
         last_seen_at: new Date().toISOString(),
       });
+      totalEventsCached++;
     }
 
     nextPageToken = result.nextPageToken;
@@ -65,7 +67,7 @@ export async function performInitialSync(subscriptionId: string): Promise<void> 
       sync_token: nextSyncToken,
       last_sync_at: new Date().toISOString(),
     });
-    console.log(`[performInitialSync] Completed initial sync for subscription ${subscriptionId}, cached ${result.items.length} events`);
+    console.log(`[performInitialSync] Completed initial sync for subscription ${subscriptionId}, cached ${totalEventsCached} events`);
   } else {
     console.warn(`[performInitialSync] No sync token received for subscription ${subscriptionId}`);
   }

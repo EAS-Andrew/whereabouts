@@ -164,11 +164,7 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
     user_id: subscription.user_id,
   });
 
-  if (!subscription.sync_token) {
-    console.log(`[syncSubscription] 📥 No sync token yet - this is first sync, will get sync token from Google`);
-    // Don't do initial sync - just get the sync token from this first incremental call
-    // Any events that exist will be treated as "new" which is fine
-  }
+  // Simplified: We always just fetch today's events, no need for sync tokens
 
   console.log(`[syncSubscription] 🔍 Looking up user: ${subscription.user_id}`);
   const user = await getUser(subscription.user_id);
@@ -180,24 +176,23 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
 
   let result;
   try {
-    if (subscription.sync_token) {
-      console.log(`[syncSubscription] 📡 Fetching events from Google Calendar (incremental sync with token)`);
-      // Use syncToken for incremental sync
-      result = await listEvents(user.google_user_id, subscription.calendar_id, {
-        syncToken: subscription.sync_token,
-      });
-    } else {
-      console.log(`[syncSubscription] 📡 Fetching events from Google Calendar (first sync, no token)`);
-      // First sync - get events and a sync token for future use
-      // Only get events from now forward to keep it light
-      const timeMin = new Date().toISOString();
-      result = await listEvents(user.google_user_id, subscription.calendar_id, {
-        timeMin,
-        singleEvents: true,
-        orderBy: 'startTime',
-      });
-    }
-    console.log(`[syncSubscription] ✅ Received ${result.items.length} events from Google`);
+    // SIMPLE: Always just get TODAY's events (that's all we need!)
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    console.log(`[syncSubscription] 📡 Fetching TODAY's events (${todayStart.toISOString()} to ${todayEnd.toISOString()})`);
+    
+    result = await listEvents(user.google_user_id, subscription.calendar_id, {
+      timeMin: todayStart.toISOString(),
+      timeMax: todayEnd.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+    });
+    
+    console.log(`[syncSubscription] ✅ Received ${result.items.length} events for today from Google`);
   } catch (error: any) {
     // If sync token is invalid (410 error), clear it and retry without token
     if (error.code === 410 || error.message?.includes('Sync token') || error.message?.includes('410')) {
@@ -218,37 +213,21 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
   }
 
   const changes: EventChange[] = [];
-  const isFirstSync = !subscription.sync_token;
 
-  console.log(`[syncSubscription] 🔍 Processing ${result.items.length} events for changes... (first sync: ${isFirstSync})`);
+  console.log(`[syncSubscription] 🔍 Processing ${result.items.length} events for today...`);
 
-  // Process each event
-  let processed = 0;
+  // SIMPLE: Detect changes for today's events only
   for (const event of result.items) {
-    processed++;
-    if (processed % 50 === 0) {
-      console.log(`[syncSubscription] ⏳ Processed ${processed}/${result.items.length} events...`);
-    }
+    // Use change detection (will detect new/updated/cancelled)
+    const change = await detectEventChange(event, subscriptionId);
 
-    // On first sync, treat all non-cancelled events as "new" for notifications
-    // (even though they're not technically "new", we want to notify about them)
-    if (isFirstSync && event.status !== 'cancelled') {
-      changes.push({
-        type: 'new',
-        event,
+    if (change) {
+      console.log(`[syncSubscription] 📝 Change detected:`, {
+        type: change.type,
+        event: event.summary || event.id,
+        status: event.status,
       });
-    } else {
-      // On subsequent syncs, use change detection
-      const change = await detectEventChange(event, subscriptionId);
-
-      if (change) {
-        console.log(`[syncSubscription] 📝 Change detected:`, {
-          type: change.type,
-          event: event.summary || event.id,
-          status: event.status,
-        });
-        changes.push(change);
-      }
+      changes.push(change);
     }
 
     // Update cache
@@ -266,7 +245,7 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
     }
   }
 
-  console.log(`[syncSubscription] ✅ Finished processing all ${result.items.length} events`);
+  console.log(`[syncSubscription] ✅ Finished processing ${result.items.length} events`);
 
   console.log(`[syncSubscription] 📊 Summary: ${changes.length} total changes detected (${isFirstSync ? 'first sync - all events treated as new' : 'incremental sync'})`);
 
@@ -310,14 +289,11 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
     }
   }
 
-  // Update sync token
-  if (result.nextSyncToken) {
-    await updateCalendarSubscription(subscriptionId, {
-      sync_token: result.nextSyncToken,
-      last_sync_at: new Date().toISOString(),
-    });
-    console.log(`[syncSubscription] ✅ Updated sync token for subscription ${subscriptionId}`);
-  }
+  // Update last sync time (we don't need sync tokens since we always query by date range)
+  await updateCalendarSubscription(subscriptionId, {
+    last_sync_at: new Date().toISOString(),
+  });
+  console.log(`[syncSubscription] ✅ Updated last sync time for subscription ${subscriptionId}`);
 
   console.log(`[syncSubscription] ✅ Sync completed for subscription ${subscriptionId}`);
 }

@@ -111,7 +111,7 @@ export async function getDiscordChannel(channelId: string): Promise<DiscordChann
   return {
     ...channel,
     webhook_url: decrypt(channel.webhook_url),
-    is_default: channelData.is_default === 'true' || channelData.is_default === true,
+    is_default: (channelData.is_default as any) === 'true' || (channelData.is_default as any) === true,
   };
 }
 

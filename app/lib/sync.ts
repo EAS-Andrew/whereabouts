@@ -5,11 +5,15 @@ import {
   cacheEvent,
   getCachedEvent,
   listUserSubscriptions,
+  getStatusMessageId,
+  setStatusMessageId,
+  clearStatusMessageId,
 } from './redis';
 import { listEvents, watchCalendar, stopWatchChannel } from './google-calendar';
-import { getUser } from './redis';
-import { postToDiscordWithRetry } from './discord';
+import { getUser, getDiscordChannel } from './redis';
+import { postToDiscordWithRetry, editDiscordMessage } from './discord';
 import { formatEventChangeForDiscord } from './message-formatting';
+import { buildLocationStatus, formatStatusBoard } from './location-tracking';
 import type { EventChange, GoogleCalendarEvent } from './types';
 
 export async function performInitialSync(subscriptionId: string): Promise<void> {
@@ -247,44 +251,58 @@ export async function syncSubscription(subscriptionId: string): Promise<void> {
 
   console.log(`[syncSubscription] ✅ Finished processing ${result.items.length} events`);
 
-  console.log(`[syncSubscription] 📊 Summary: ${changes.length} total changes detected`);
-
-  // Filter and send notifications
-  const notificationsToSend = changes.filter(change => {
-    const shouldNotify = shouldNotifyForChange(change, subscription);
-    if (!shouldNotify) {
-      console.log(`[syncSubscription] ⏭️  Skipping notification for ${change.type} event "${change.event.summary || change.event.id}" (filtered by settings)`);
-    }
-    return shouldNotify;
-  });
-
-  console.log(`[syncSubscription] 📬 ${notificationsToSend.length} notifications will be sent (filtered from ${changes.length} changes)`);
-
+  // Build location status board from today's events
+  console.log(`[syncSubscription] 📍 Building location status board...`);
+  const statusBoard = buildLocationStatus(result.items);
+  const embed = formatStatusBoard(statusBoard);
+  
   // Get Discord channel
   console.log(`[syncSubscription] 🔍 Looking up Discord channel: ${subscription.discord_channel_id}`);
-  const discordChannel = await import('./redis').then(m =>
-    m.getDiscordChannel(subscription.discord_channel_id)
-  );
+  const discordChannel = await getDiscordChannel(subscription.discord_channel_id);
 
   if (!discordChannel) {
     console.error(`[syncSubscription] ❌ Discord channel not found: ${subscription.discord_channel_id}`);
   } else {
     console.log(`[syncSubscription] ✅ Discord channel found: ${discordChannel.name || discordChannel.id}`);
 
-    // Send notifications
-    for (const change of notificationsToSend) {
-      console.log(`[syncSubscription] 📤 Sending Discord notification for: ${change.event.summary}`);
-      const payload = formatEventChangeForDiscord(change, subscription.calendar_summary);
-
-      const result = await postToDiscordWithRetry(discordChannel.webhook_url, payload);
+    // Check if we have an existing status message ID for today
+    const existingMessageId = await getStatusMessageId(subscriptionId);
+    
+    if (existingMessageId) {
+      console.log(`[syncSubscription] 🔄 Updating existing status message: ${existingMessageId}`);
+      const result = await editDiscordMessage(discordChannel.webhook_url, existingMessageId, {
+        embeds: [embed],
+      });
 
       if (!result.success) {
-        console.error(
-          `[syncSubscription] Failed to send Discord notification for subscription ${subscriptionId}:`,
-          result.error
-        );
+        console.error(`[syncSubscription] ❌ Failed to update status message: ${result.error}`);
+        // If update failed (message deleted), clear the ID and post new
+        await clearStatusMessageId(subscriptionId);
+        console.log(`[syncSubscription] 📤 Posting new status message...`);
+        const postResult = await postToDiscordWithRetry(discordChannel.webhook_url, {
+          embeds: [embed],
+        });
+        
+        if (postResult.success && postResult.messageId) {
+          await setStatusMessageId(subscriptionId, postResult.messageId);
+          console.log(`[syncSubscription] ✅ Posted new status message: ${postResult.messageId}`);
+        } else {
+          console.error(`[syncSubscription] ❌ Failed to post status message: ${postResult.error}`);
+        }
       } else {
-        console.log(`[syncSubscription] ✅ Sent ${change.type} notification for event: ${change.event.summary}`);
+        console.log(`[syncSubscription] ✅ Updated status message successfully`);
+      }
+    } else {
+      console.log(`[syncSubscription] 📤 Posting new status message...`);
+      const result = await postToDiscordWithRetry(discordChannel.webhook_url, {
+        embeds: [embed],
+      });
+
+      if (result.success && result.messageId) {
+        await setStatusMessageId(subscriptionId, result.messageId);
+        console.log(`[syncSubscription] ✅ Posted status message: ${result.messageId}`);
+      } else {
+        console.error(`[syncSubscription] ❌ Failed to post status message: ${result.error}`);
       }
     }
   }

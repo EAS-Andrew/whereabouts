@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { redis } from '@/app/lib/redis';
+import { redis, clearStatusMessageId, setStatusMessageId } from '@/app/lib/redis';
 import { getGoogleCalendarClient } from '@/app/lib/google-calendar';
 import { decrypt } from '@/app/lib/encryption';
 import { postToDiscordWithRetry } from '@/app/lib/discord';
+import { buildLocationStatus, formatStatusBoard } from '@/app/lib/location-tracking';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -82,57 +83,22 @@ export async function GET(request: Request) {
         const events = response.data.items || [];
         console.log(`[Daily Summary] Found ${events.length} events for today`);
 
-        if (events.length === 0) {
-          // Optional: Send "No events today" message
-          console.log(`[Daily Summary] No events today for ${subData.calendar_summary}, skipping notification`);
-          continue;
-        }
+        // Clear old message ID so we post a fresh one
+        await clearStatusMessageId(subscriptionId);
+        console.log(`[Daily Summary] Cleared old message ID for new day`);
 
-        // Format the daily summary
-        const embed = {
-          title: `📅 Today's Events - ${subData.calendar_summary}`,
-          description: `You have ${events.length} event${events.length > 1 ? 's' : ''} scheduled for today`,
-          color: 0x4285f4, // Google Calendar blue
-          fields: events.map(event => {
-            const start = event.start?.dateTime || event.start?.date;
-            const end = event.end?.dateTime || event.end?.date;
-            
-            let timeStr = '';
-            if (start) {
-              const startTime = new Date(start);
-              if (event.start?.dateTime) {
-                // Has specific time
-                timeStr = startTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-                if (end) {
-                  const endTime = new Date(end);
-                  timeStr += ` - ${endTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
-                }
-              } else {
-                // All-day event
-                timeStr = 'All day';
-              }
-            }
+        // Build location status board
+        const statusBoard = buildLocationStatus(events);
+        const embed = formatStatusBoard(statusBoard);
 
-            return {
-              name: event.summary || '(No title)',
-              value: [
-                `🕐 ${timeStr}`,
-                event.location ? `📍 ${event.location}` : '',
-                event.description ? `📝 ${event.description.substring(0, 100)}${event.description.length > 100 ? '...' : ''}` : '',
-              ].filter(Boolean).join('\n'),
-              inline: false,
-            };
-          }),
-          footer: {
-            text: `Daily Summary • ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`,
-          },
-          timestamp: new Date().toISOString(),
-        };
-
-        // Send to Discord
+        // Post new status message for the day
         const result = await postToDiscordWithRetry(webhookUrl, {
           embeds: [embed],
         });
+        
+        if (result.success && result.messageId) {
+          await setStatusMessageId(subscriptionId, result.messageId);
+        }
 
         if (result.success) {
           console.log(`[Daily Summary] ✅ Sent daily summary for ${subData.calendar_summary}`);

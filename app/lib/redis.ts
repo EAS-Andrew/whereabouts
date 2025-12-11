@@ -187,6 +187,18 @@ export async function findSubscriptionByGoogleChannel(googleChannelId: string): 
   return getCalendarSubscription(subscriptionId);
 }
 
+export async function getStatusMessageId(subscriptionId: string): Promise<string | null> {
+  return await redis.get(`subscription:${subscriptionId}:status_message_id`);
+}
+
+export async function setStatusMessageId(subscriptionId: string, messageId: string): Promise<void> {
+  await redis.set(`subscription:${subscriptionId}:status_message_id`, messageId);
+}
+
+export async function clearStatusMessageId(subscriptionId: string): Promise<void> {
+  await redis.del(`subscription:${subscriptionId}:status_message_id`);
+}
+
 export async function updateCalendarSubscription(
   subscriptionId: string,
   updates: Partial<CalendarSubscription>

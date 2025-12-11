@@ -61,14 +61,30 @@ export async function postToDiscordWithRetry(
   webhookUrl: string,
   payload: DiscordWebhookPayload,
   maxRetries: number = 3
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; messageId?: string }> {
   let lastError: string | undefined;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const result = await postToDiscord(webhookUrl, payload);
 
     if (result.success) {
-      return result;
+      // Extract message ID from response if available
+      let messageId: string | undefined;
+      try {
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          messageId = data.id;
+        }
+      } catch {
+        // Ignore - message ID is optional
+      }
+      
+      return { success: true, messageId };
     }
 
     lastError = result.error;
@@ -88,4 +104,50 @@ export async function postToDiscordWithRetry(
     success: false,
     error: lastError,
   };
+}
+
+/**
+ * Edit an existing Discord message via webhook
+ */
+export async function editDiscordMessage(
+  webhookUrl: string,
+  messageId: string,
+  payload: DiscordWebhookPayload
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Discord webhook edit URL format: {webhookUrl}/messages/{messageId}
+    const editUrl = webhookUrl.includes('?')
+      ? `${webhookUrl.split('?')[0]}/messages/${messageId}?${webhookUrl.split('?')[1]}`
+      : `${webhookUrl}/messages/${messageId}`;
+
+    const response = await fetch(editUrl, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (response.status === 404) {
+      return {
+        success: false,
+        error: 'Message not found - may have been deleted',
+      };
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return {
+        success: false,
+        error: `Failed to edit message: ${response.status} ${errorText}`,
+      };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
 }
